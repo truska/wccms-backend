@@ -1,0 +1,142 @@
+-- Core CMS tables
+
+CREATE TABLE IF NOT EXISTS cms_userrole (
+  id INT(8) UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(32) NOT NULL,
+  showonweb ENUM('Yes','No') NOT NULL DEFAULT 'Yes',
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
+  sort INT(8) UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_cms_userrole_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cms_users (
+  id INT(8) UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(32) NOT NULL,
+  showonweb ENUM('Yes','No') NOT NULL DEFAULT 'Yes',
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
+  firstname VARCHAR(32) DEFAULT NULL,
+  surname VARCHAR(32) DEFAULT NULL,
+  username VARCHAR(64) NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  gender ENUM('Male','Female','Unknown') NOT NULL DEFAULT 'Unknown',
+  userrole INT(4) UNSIGNED NOT NULL DEFAULT 0,
+  image VARCHAR(64) DEFAULT NULL,
+  recordstoshow INT(8) UNSIGNED NOT NULL DEFAULT 25,
+  tinymce ENUM('Reduced','Standard','Custom') NOT NULL DEFAULT 'Standard',
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_cms_users_username (username),
+  KEY idx_cms_users_userrole (userrole),
+  CONSTRAINT fk_cms_users_userrole FOREIGN KEY (userrole) REFERENCES cms_userrole (id)
+    ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cms_password_resets (
+  id INT(8) UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(32) NOT NULL DEFAULT 'reset',
+  showonweb ENUM('Yes','No') NOT NULL DEFAULT 'Yes',
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
+  user_id INT(8) UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME DEFAULT NULL,
+  request_ip VARCHAR(45) DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_cms_password_resets_token (token_hash),
+  KEY idx_cms_password_resets_user (user_id),
+  CONSTRAINT fk_cms_password_resets_user FOREIGN KEY (user_id) REFERENCES cms_users (id)
+    ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cms_preferences (
+  id INT(16) NOT NULL AUTO_INCREMENT,
+  name VARCHAR(32) NOT NULL,
+  label VARCHAR(80) NOT NULL,
+  value VARCHAR(2048) NOT NULL,
+  notes LONGTEXT NOT NULL,
+  prefCat INT(16) NOT NULL,
+  field INT(16) NOT NULL,
+  class VARCHAR(16) NOT NULL,
+  userlevel INT(6) NOT NULL DEFAULT 30,
+  sort INT(16) NOT NULL,
+  comment VARCHAR(512) NOT NULL,
+  placeholder VARCHAR(64) NOT NULL,
+  required ENUM('Yes','No') NOT NULL DEFAULT 'No',
+  max INT(4) NOT NULL,
+  min INT(4) NOT NULL,
+  step INT(6) NOT NULL,
+  tooltip VARCHAR(512) NOT NULL,
+  logmask INT(8) NOT NULL DEFAULT 0,
+  showoncms ENUM('Yes','No') NOT NULL DEFAULT 'No',
+  showonweb ENUM('Yes','No') NOT NULL DEFAULT 'Yes',
+  allowedit ENUM('Yes','No') NOT NULL DEFAULT 'Yes',
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_cms_preferences_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cms_log (
+  id INT(8) UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(64) NOT NULL,
+  user_id INT(8) UNSIGNED DEFAULT NULL,
+  scope ENUM('web','cms') NOT NULL DEFAULT 'cms',
+  action VARCHAR(64) NOT NULL,
+  form_name VARCHAR(64) DEFAULT NULL,
+  record_id INT(16) DEFAULT NULL,
+  table_name VARCHAR(64) DEFAULT NULL,
+  sql_text TEXT DEFAULT NULL,
+  ip VARCHAR(45) DEFAULT NULL,
+  user_agent VARCHAR(255) DEFAULT NULL,
+  showonweb ENUM('Yes','No') NOT NULL DEFAULT 'Yes',
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_cms_log_user (user_id),
+  KEY idx_cms_log_action (action),
+  KEY idx_cms_log_table (table_name),
+  KEY idx_cms_log_created (created)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cms_form_view_list (
+  id INT(8) UNSIGNED NOT NULL AUTO_INCREMENT,
+  form_id INT(8) UNSIGNED NOT NULL,
+  name VARCHAR(32) NOT NULL,
+  overridename VARCHAR(32) DEFAULT NULL,
+  tableID INT(6) NOT NULL DEFAULT 0,
+  type ENUM('None','Search','Select') NOT NULL DEFAULT 'Search',
+  ruleid INT(4) NOT NULL DEFAULT 1,
+  sort INT(8) UNSIGNED NOT NULL DEFAULT 0,
+  showonweb ENUM('Yes','No') NOT NULL DEFAULT 'Yes',
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_cms_form_view_list_form (form_id),
+  KEY idx_cms_form_view_list_sort (sort)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cms_view_rules (
+  id INT(4) UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(64) NOT NULL,
+  kind ENUM('text','link','date','style') NOT NULL DEFAULT 'text',
+  format VARCHAR(255) DEFAULT NULL,
+  css_class VARCHAR(64) DEFAULT NULL,
+  wrapper_tag VARCHAR(32) DEFAULT NULL,
+  target VARCHAR(32) DEFAULT NULL,
+  rel VARCHAR(64) DEFAULT NULL,
+  showonweb ENUM('Yes','No') NOT NULL DEFAULT 'Yes',
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  modified TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_cms_view_rules_show (showonweb)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

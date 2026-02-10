@@ -1,0 +1,2 @@
+/sql/snapshots/*.sql
+/sql/migrations/*.generated.sql
