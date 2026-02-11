@@ -4,8 +4,8 @@ require_once __DIR__ . '/../../../private/dbcon.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/email.php';
 require_once __DIR__ . '/prefs.php';
-require_once __DIR__ . '/../../includes/lib/cms_log.php';
-require_once __DIR__ . '/../../includes/lib/cms_icons.php';
+require_once __DIR__ . '/lib/cms_log.php';
+require_once __DIR__ . '/lib/cms_icons.php';
 require_once __DIR__ . '/lib/cms_media.php';
 
 // Common template variables.
