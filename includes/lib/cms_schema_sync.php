@@ -109,8 +109,90 @@ function cms_schema_sync_parse_columns(string $createSql): array {
   return $columns;
 }
 
+function cms_schema_sync_parse_referenced_tables(string $sql): array {
+  $refs = [];
+  if (preg_match_all('/\bREFERENCES\s+`?([A-Za-z0-9_]+)`?/i', $sql, $m)) {
+    foreach (($m[1] ?? []) as $name) {
+      $table = (string) $name;
+      if ($table !== '') {
+        $refs[$table] = true;
+      }
+    }
+  }
+  return array_keys($refs);
+}
+
+function cms_schema_sync_order_create_operations(array $createOpsByTable): array {
+  if ($createOpsByTable === []) {
+    return [];
+  }
+
+  $deps = [];
+  $dependents = [];
+  $inDegree = [];
+
+  foreach ($createOpsByTable as $table => $op) {
+    $table = (string) $table;
+    $inDegree[$table] = 0;
+    $deps[$table] = [];
+  }
+
+  foreach ($createOpsByTable as $table => $op) {
+    $table = (string) $table;
+    $sql = (string) ($op['sql'] ?? '');
+    $refs = cms_schema_sync_parse_referenced_tables($sql);
+    foreach ($refs as $refTable) {
+      if ($refTable === $table || !isset($createOpsByTable[$refTable])) {
+        continue;
+      }
+      if (isset($deps[$table][$refTable])) {
+        continue;
+      }
+      $deps[$table][$refTable] = true;
+      $inDegree[$table]++;
+      $dependents[$refTable][] = $table;
+    }
+  }
+
+  $queue = [];
+  foreach ($inDegree as $table => $degree) {
+    if ($degree === 0) {
+      $queue[] = $table;
+    }
+  }
+  sort($queue, SORT_STRING);
+
+  $orderedTables = [];
+  while ($queue !== []) {
+    $table = array_shift($queue);
+    $orderedTables[] = $table;
+
+    foreach (($dependents[$table] ?? []) as $dependent) {
+      $inDegree[$dependent]--;
+      if ($inDegree[$dependent] === 0) {
+        $queue[] = $dependent;
+      }
+    }
+    sort($queue, SORT_STRING);
+  }
+
+  // If there is a cycle, append remaining tables deterministically.
+  if (count($orderedTables) < count($createOpsByTable)) {
+    $remaining = array_diff(array_keys($createOpsByTable), $orderedTables);
+    sort($remaining, SORT_STRING);
+    $orderedTables = array_merge($orderedTables, $remaining);
+  }
+
+  $ordered = [];
+  foreach ($orderedTables as $table) {
+    $ordered[] = $createOpsByTable[$table];
+  }
+  return $ordered;
+}
+
 function cms_schema_sync_plan(PDO $source, PDO $target, array $options = []): array {
-  $operations = [];
+  $createOpsByTable = [];
+  $addColumnOps = [];
   $prefix = (string) ($options['table_prefix'] ?? '');
 
   $sourceTables = cms_schema_sync_filter_tables(cms_schema_sync_tables($source), $prefix);
@@ -122,7 +204,7 @@ function cms_schema_sync_plan(PDO $source, PDO $target, array $options = []): ar
   foreach (array_keys($sourceTables) as $table) {
     if (!isset($targetTables[$table])) {
       $createSql = cms_schema_sync_show_create($source, $table);
-      $operations[] = [
+      $createOpsByTable[$table] = [
         'type' => 'create_table',
         'table' => $table,
         'column' => null,
@@ -141,7 +223,7 @@ function cms_schema_sync_plan(PDO $source, PDO $target, array $options = []): ar
       if (isset($targetCols[$column])) {
         continue;
       }
-      $operations[] = [
+      $addColumnOps[] = [
         'type' => 'add_column',
         'table' => $table,
         'column' => $column,
@@ -150,6 +232,11 @@ function cms_schema_sync_plan(PDO $source, PDO $target, array $options = []): ar
       $missingColumns++;
     }
   }
+
+  $operations = array_merge(
+    cms_schema_sync_order_create_operations($createOpsByTable),
+    $addColumnOps
+  );
 
   return [
     'summary' => [
@@ -198,20 +285,25 @@ function cms_schema_sync_table_coverage(PDO $source, PDO $target, string $prefix
 
 function cms_schema_sync_apply(PDO $target, array $operations): array {
   $applied = [];
-  foreach ($operations as $index => $operation) {
-    $sql = (string) ($operation['sql'] ?? '');
-    if ($sql === '') {
-      continue;
-    }
+  $target->exec('SET FOREIGN_KEY_CHECKS=0');
+  try {
+    foreach ($operations as $index => $operation) {
+      $sql = (string) ($operation['sql'] ?? '');
+      if ($sql === '') {
+        continue;
+      }
 
-    $target->exec($sql);
-    $applied[] = [
-      'index' => $index + 1,
-      'type' => $operation['type'] ?? 'unknown',
-      'table' => $operation['table'] ?? '',
-      'column' => $operation['column'] ?? null,
-      'sql' => $sql,
-    ];
+      $target->exec($sql);
+      $applied[] = [
+        'index' => $index + 1,
+        'type' => $operation['type'] ?? 'unknown',
+        'table' => $operation['table'] ?? '',
+        'column' => $operation['column'] ?? null,
+        'sql' => $sql,
+      ];
+    }
+  } finally {
+    $target->exec('SET FOREIGN_KEY_CHECKS=1');
   }
 
   return $applied;
