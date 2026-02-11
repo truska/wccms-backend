@@ -1,6 +1,6 @@
 <?php
 if (!function_exists('cms_icon_class')) {
-  require_once __DIR__ . '/../../includes/lib/cms_icons.php';
+  require_once __DIR__ . '/lib/cms_icons.php';
 }
 
 /**
