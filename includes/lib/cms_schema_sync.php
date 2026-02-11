@@ -122,6 +122,37 @@ function cms_schema_sync_parse_referenced_tables(string $sql): array {
   return array_keys($refs);
 }
 
+function cms_schema_sync_split_create_table_sql(string $createSql): array {
+  $lines = preg_split('/\R/', $createSql) ?: [];
+  $createLines = [];
+  $foreignKeyDefs = [];
+
+  foreach ($lines as $line) {
+    $trimmed = trim($line);
+    $normalized = rtrim($trimmed, ',');
+    if (preg_match('/^CONSTRAINT\b.*\bFOREIGN KEY\b/i', $normalized)) {
+      $foreignKeyDefs[] = $normalized;
+      continue;
+    }
+    $createLines[] = $line;
+  }
+
+  $createWithoutFk = implode("\n", $createLines);
+  // Fix dangling commas left before the closing parenthesis.
+  while (true) {
+    $updated = preg_replace('/,\s*(\R\s*\))/m', '$1', $createWithoutFk);
+    if (!is_string($updated) || $updated === $createWithoutFk) {
+      break;
+    }
+    $createWithoutFk = $updated;
+  }
+
+  return [
+    'create_sql' => $createWithoutFk,
+    'foreign_keys' => $foreignKeyDefs,
+  ];
+}
+
 function cms_schema_sync_order_create_operations(array $createOpsByTable): array {
   if ($createOpsByTable === []) {
     return [];
@@ -193,6 +224,7 @@ function cms_schema_sync_order_create_operations(array $createOpsByTable): array
 function cms_schema_sync_plan(PDO $source, PDO $target, array $options = []): array {
   $createOpsByTable = [];
   $addColumnOps = [];
+  $addForeignKeyOps = [];
   $prefix = (string) ($options['table_prefix'] ?? '');
 
   $sourceTables = cms_schema_sync_filter_tables(cms_schema_sync_tables($source), $prefix);
@@ -204,12 +236,25 @@ function cms_schema_sync_plan(PDO $source, PDO $target, array $options = []): ar
   foreach (array_keys($sourceTables) as $table) {
     if (!isset($targetTables[$table])) {
       $createSql = cms_schema_sync_show_create($source, $table);
+      $parts = cms_schema_sync_split_create_table_sql($createSql);
       $createOpsByTable[$table] = [
         'type' => 'create_table',
         'table' => $table,
         'column' => null,
-        'sql' => $createSql . ';',
+        'sql' => ((string) ($parts['create_sql'] ?? $createSql)) . ';',
       ];
+      foreach (($parts['foreign_keys'] ?? []) as $fkDef) {
+        $fkSql = trim((string) $fkDef);
+        if ($fkSql === '') {
+          continue;
+        }
+        $addForeignKeyOps[] = [
+          'type' => 'add_foreign_key',
+          'table' => $table,
+          'column' => null,
+          'sql' => 'ALTER TABLE `' . str_replace('`', '``', $table) . '` ADD ' . $fkSql . ';',
+        ];
+      }
       $missingTables++;
       continue;
     }
@@ -235,7 +280,8 @@ function cms_schema_sync_plan(PDO $source, PDO $target, array $options = []): ar
 
   $operations = array_merge(
     cms_schema_sync_order_create_operations($createOpsByTable),
-    $addColumnOps
+    $addColumnOps,
+    $addForeignKeyOps
   );
 
   return [
@@ -285,6 +331,7 @@ function cms_schema_sync_table_coverage(PDO $source, PDO $target, string $prefix
 
 function cms_schema_sync_apply(PDO $target, array $operations): array {
   $applied = [];
+  $fkWarnings = [];
   $target->exec('SET FOREIGN_KEY_CHECKS=0');
   try {
     foreach ($operations as $index => $operation) {
@@ -293,7 +340,23 @@ function cms_schema_sync_apply(PDO $target, array $operations): array {
         continue;
       }
 
-      $target->exec($sql);
+      try {
+        $target->exec($sql);
+      } catch (Throwable $e) {
+        if (($operation['type'] ?? '') === 'add_foreign_key') {
+          $fkWarnings[] = [
+            'index' => $index + 1,
+            'type' => 'add_foreign_key_skipped',
+            'table' => $operation['table'] ?? '',
+            'column' => null,
+            'sql' => $sql,
+            'error' => $e->getMessage(),
+          ];
+          continue;
+        }
+        throw $e;
+      }
+
       $applied[] = [
         'index' => $index + 1,
         'type' => $operation['type'] ?? 'unknown',
@@ -306,5 +369,5 @@ function cms_schema_sync_apply(PDO $target, array $operations): array {
     $target->exec('SET FOREIGN_KEY_CHECKS=1');
   }
 
-  return $applied;
+  return array_merge($applied, $fkWarnings);
 }
