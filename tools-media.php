@@ -2,6 +2,12 @@
 require_once __DIR__ . '/includes/boot.php';
 cms_require_login();
 
+$toolMeta = [
+  'id' => 'tools-media',
+  'version' => 'v1.1.0',
+  'updated_at' => '2026-02-11 18:10 UTC',
+];
+
 $message = '';
 $error = '';
 
@@ -60,6 +66,11 @@ include __DIR__ . '/includes/header.php';
       <div>
         <h1 class="h3 mb-1">Media Tools</h1>
         <p class="text-muted mb-0">Create image folder structures for uploads.</p>
+        <p class="text-muted small mb-0">
+          Tool: <code><?php echo cms_h($toolMeta['id']); ?></code>
+          | Version: <code><?php echo cms_h($toolMeta['version']); ?></code>
+          | Updated: <code><?php echo cms_h($toolMeta['updated_at']); ?></code>
+        </p>
       </div>
     </div>
 

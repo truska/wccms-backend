@@ -3,6 +3,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/lib/cms_schema_sync.php';
 
+$toolMeta = [
+  'id' => 'tools-data',
+  'version' => 'v1.2.0',
+  'updated_at' => '2026-02-11 18:10 UTC',
+];
+
 $embedParam = strtolower((string) ($_GET['embed'] ?? ''));
 $embeddedMode = in_array($embedParam, ['1', 'yes', 'true', 'on'], true);
 
@@ -190,6 +196,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card">
       <h1>WCCMS Data Tools</h1>
       <p>Direct-access tool for database checks and additive schema sync. Use when CMS menu/auth is unavailable.</p>
+      <p class="small">
+        Tool: <code><?php echo td_h($toolMeta['id']); ?></code>
+        | Version: <code><?php echo td_h($toolMeta['version']); ?></code>
+        | Updated: <code><?php echo td_h($toolMeta['updated_at']); ?></code>
+      </p>
       <p class="small">URL: <code>/wccms/tools-data.php</code></p>
     </div>
 
