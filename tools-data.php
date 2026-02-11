@@ -19,10 +19,11 @@ function td_load_target_runtime(string $targetConfigPath): array {
   $DB_OK = false;
   $DB_ERROR = null;
   $DB_CONFIG_SOURCE = basename($targetConfigPath);
-  $DB_HOST = '';
-  $DB_NAME = '';
-  $DB_USER = '';
-  $DB_PASS = '';
+  // Use null so dbcon-local.php "??" defaults still apply.
+  $DB_HOST = null;
+  $DB_NAME = null;
+  $DB_USER = null;
+  $DB_PASS = null;
 
   if (!is_file($targetConfigPath)) {
     throw new RuntimeException("Target DB config not found: {$targetConfigPath}");
