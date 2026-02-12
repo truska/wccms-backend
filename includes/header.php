@@ -1,10 +1,13 @@
 <!-- CMS top navigation bar -->
+<?php
+$cmsHeaderLogo = trim((string) cms_pref('prefLogo', 'witecanvas-logo-l.png', 'cms'));
+?>
 <header class="cms-topbar">
   <div class="cms-topbar-left">
     <button class="cms-burger" type="button" aria-label="Toggle menu" aria-controls="cmsSidebar" aria-expanded="true">
       <i class="fa-solid fa-bars"></i>
     </button>
-    <img src="<?php echo $baseURL; ?>/filestore/images/logos/witecanvas-logo-l.png" alt="wITeCanvas" class="cms-logo">
+    <img src="<?php echo $baseURL; ?>/filestore/images/logos/<?php echo cms_h($cmsHeaderLogo !== '' ? $cmsHeaderLogo : 'witecanvas-logo-l.png'); ?>" alt="wITeCanvas" class="cms-logo">
   </div>
   <div class="cms-topbar-center">
     <span class="cms-site-title"><?php echo cms_h($CMS_SITE_NAME); ?></span>

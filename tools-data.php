@@ -5,8 +5,8 @@ require_once __DIR__ . '/includes/lib/cms_schema_sync.php';
 
 $toolMeta = [
   'id' => 'tools-data',
-  'version' => 'v1.2.0',
-  'updated_at' => '2026-02-11 18:10 UTC',
+  'version' => 'v1.4.0',
+  'updated_at' => '2026-02-12 11:55 UTC',
 ];
 
 $embedParam = strtolower((string) ($_GET['embed'] ?? ''));
@@ -75,6 +75,7 @@ $masterRuntime = null;
 $tableCoverage = null;
 $plan = null;
 $applied = [];
+$seeded = [];
 $formAction = $embeddedMode ? '?embed=1' : '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -125,11 +126,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($opsCount > 0) {
           $applied = cms_schema_sync_apply($targetPdo, $plan['operations'] ?? []);
-          $message = 'Applied ' . count($applied) . ' schema change(s).';
-          $tableCoverage = cms_schema_sync_table_coverage($sourcePdo, $targetPdo, $tablePrefix);
         } else {
-          $message = 'No schema changes required.';
+          $applied = [];
         }
+
+        $seeded = cms_schema_sync_seed_bootstrap_data($sourcePdo, $targetPdo);
+        $seededTables = 0;
+        $seededRows = 0;
+        foreach ($seeded as $seedRow) {
+          if (($seedRow['status'] ?? '') !== 'seeded') {
+            continue;
+          }
+          $seededTables++;
+          $seededRows += (int) ($seedRow['inserted'] ?? 0);
+        }
+
+        $message = ($opsCount > 0)
+          ? ('Applied ' . count($applied) . ' schema change(s).')
+          : 'No schema changes required.';
+        $message .= ' Bootstrap seed: ' . $seededRows . ' row(s) across ' . $seededTables . ' table(s).';
+        $tableCoverage = cms_schema_sync_table_coverage($sourcePdo, $targetPdo, $tablePrefix);
       } else {
         $message = ($opsCount === 0)
           ? 'No schema changes required.'
@@ -351,6 +367,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <td><?php echo td_h((string) ($row['type'] ?? '')); ?></td>
                 <td><?php echo td_h((string) ($row['table'] ?? '')); ?></td>
                 <td><?php echo td_h((string) ($row['column'] ?? '')); ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+
+    <?php if (!empty($seeded)): ?>
+      <div class="card">
+        <h2>Bootstrap Seed Results</h2>
+        <table>
+          <thead>
+            <tr><th>Table</th><th>Status</th><th>Rows</th><th>Copied</th><th>Legacy</th><th>Reason</th></tr>
+          </thead>
+          <tbody>
+            <?php foreach ($seeded as $row): ?>
+              <tr>
+                <td><code><?php echo td_h((string) ($row['table'] ?? '')); ?></code></td>
+                <td><?php echo td_h((string) ($row['status'] ?? '')); ?></td>
+                <td><?php echo (int) ($row['inserted'] ?? 0); ?></td>
+                <td><?php echo (int) ($row['copied_values'] ?? 0); ?></td>
+                <td><?php echo td_h((string) ($row['legacy_available'] ?? '')); ?></td>
+                <td><?php echo td_h((string) ($row['reason'] ?? '')); ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
