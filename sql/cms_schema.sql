@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS cms_preferences (
   name VARCHAR(32) NOT NULL,
   label VARCHAR(80) NOT NULL,
   value VARCHAR(2048) NOT NULL,
+  migrule ENUM('default','copy') NOT NULL DEFAULT 'default',
   notes LONGTEXT NOT NULL,
   prefCat INT(16) NOT NULL,
   field INT(16) NOT NULL,

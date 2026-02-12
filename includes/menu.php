@@ -90,6 +90,9 @@ foreach ($cmsMenuRows as $row) {
 }
 
 ksort($menuSections);
+
+$cmsVersion = trim((string) cms_pref('prefCSMVer', '1.0', 'cms'));
+$cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', 'cms'));
 ?>
 <aside id="cmsSidebar" class="cms-sidebar">
   <div class="cms-sidebar-inner">
@@ -221,14 +224,14 @@ ksort($menuSections);
       <div>User: <?php echo cms_h($CMS_USER['display_name'] ?? 'Guest'); ?></div>
       <div>Username: <?php echo cms_h($CMS_USER['email'] ?? ''); ?></div>
       <div>Role: <?php echo cms_h((string) $cmsMenuUserRole); ?></div>
-      <div>CMS Ver: 1.0</div>
+      <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '1.0'); ?></div>
       <div>User IP: <?php echo cms_h($_SERVER['REMOTE_ADDR'] ?? ''); ?></div>
     </div>
 
     <div class="cms-sidebar-footer">
-      <img src="<?php echo $baseURL; ?>/filestore/images/logos/witecanvas-logo-s.png" alt="wITeCanvas" class="cms-sidebar-logo">
+      <img src="<?php echo $baseURL; ?>/filestore/images/logos/<?php echo cms_h($cmsSidebarLogo !== '' ? $cmsSidebarLogo : 'witecanvas-logo-s.png'); ?>" alt="wITeCanvas" class="cms-sidebar-logo">
       <div>© wITeCanvas 2020 - 2026</div>
-      <div>Ver: 3.0.0</div>
+      <div>Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '1.0'); ?></div>
     </div>
   </div>
 </aside>

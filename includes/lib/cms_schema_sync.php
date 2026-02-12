@@ -371,3 +371,238 @@ function cms_schema_sync_apply(PDO $target, array $operations): array {
 
   return array_merge($applied, $fkWarnings);
 }
+
+function cms_schema_sync_table_exists(PDO $pdo, string $table): bool {
+  if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+    return false;
+  }
+  $stmt = $pdo->prepare('SHOW TABLES LIKE :table');
+  $stmt->execute([':table' => $table]);
+  return (bool) $stmt->fetchColumn();
+}
+
+function cms_schema_sync_table_count(PDO $pdo, string $table): int {
+  $sql = 'SELECT COUNT(*) FROM `' . str_replace('`', '``', $table) . '`';
+  $stmt = $pdo->query($sql);
+  return (int) $stmt->fetchColumn();
+}
+
+function cms_schema_sync_table_columns(PDO $pdo, string $table): array {
+  $sql = 'SHOW COLUMNS FROM `' . str_replace('`', '``', $table) . '`';
+  $stmt = $pdo->query($sql);
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  $cols = [];
+  foreach ($rows as $row) {
+    $name = (string) ($row['Field'] ?? '');
+    if ($name !== '') {
+      $cols[] = $name;
+    }
+  }
+  return $cols;
+}
+
+function cms_schema_sync_seed_table_from_source(
+  PDO $source,
+  PDO $target,
+  string $table,
+  ?int $limit = null
+): array {
+  if (!cms_schema_sync_table_exists($source, $table)) {
+    return ['table' => $table, 'status' => 'skipped', 'reason' => 'source_missing'];
+  }
+  if (!cms_schema_sync_table_exists($target, $table)) {
+    return ['table' => $table, 'status' => 'skipped', 'reason' => 'target_missing'];
+  }
+
+  $targetCount = cms_schema_sync_table_count($target, $table);
+  if ($targetCount > 0) {
+    return [
+      'table' => $table,
+      'status' => 'skipped',
+      'reason' => 'target_not_empty',
+      'target_count' => $targetCount,
+    ];
+  }
+
+  $sourceColumns = cms_schema_sync_table_columns($source, $table);
+  $targetColumns = cms_schema_sync_table_columns($target, $table);
+  $targetColumnMap = array_fill_keys($targetColumns, true);
+
+  $columns = [];
+  foreach ($sourceColumns as $col) {
+    if (isset($targetColumnMap[$col])) {
+      $columns[] = $col;
+    }
+  }
+
+  if ($columns === []) {
+    return ['table' => $table, 'status' => 'skipped', 'reason' => 'no_common_columns'];
+  }
+
+  $quotedColumns = array_map(static function (string $col): string {
+    return '`' . str_replace('`', '``', $col) . '`';
+  }, $columns);
+
+  $selectSql = 'SELECT ' . implode(', ', $quotedColumns) . ' FROM `' . str_replace('`', '``', $table) . '`';
+  if (in_array('id', $columns, true)) {
+    $selectSql .= ' ORDER BY `id` ASC';
+  }
+  if ($limit !== null && $limit > 0) {
+    $selectSql .= ' LIMIT ' . (int) $limit;
+  }
+
+  $rows = $source->query($selectSql)->fetchAll(PDO::FETCH_ASSOC);
+  if ($rows === []) {
+    return ['table' => $table, 'status' => 'skipped', 'reason' => 'source_empty'];
+  }
+
+  $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+  $insertSql = 'INSERT INTO `' . str_replace('`', '``', $table) . '` (' . implode(', ', $quotedColumns) . ') VALUES (' . $placeholders . ')';
+  $insertStmt = $target->prepare($insertSql);
+
+  $inserted = 0;
+  foreach ($rows as $row) {
+    $values = [];
+    foreach ($columns as $col) {
+      $values[] = $row[$col] ?? null;
+    }
+    $insertStmt->execute($values);
+    $inserted++;
+  }
+
+  return [
+    'table' => $table,
+    'status' => 'seeded',
+    'inserted' => $inserted,
+  ];
+}
+
+function cms_schema_sync_legacy_preferences_map(PDO $target): array {
+  $map = [];
+  if (!cms_schema_sync_table_exists($target, 'preferences')) {
+    return $map;
+  }
+
+  $stmt = $target->query('SELECT name, value FROM `preferences`');
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($rows as $row) {
+    $name = (string) ($row['name'] ?? '');
+    if ($name === '') {
+      continue;
+    }
+    $map[$name] = (string) ($row['value'] ?? '');
+  }
+
+  return $map;
+}
+
+function cms_schema_sync_pref_rule(array $sourceRow): string {
+  $rule = strtolower(trim((string) ($sourceRow['migrule'] ?? '')));
+  if ($rule === '') {
+    $rule = strtolower(trim((string) ($sourceRow['rule'] ?? '')));
+  }
+  return ($rule === 'copy') ? 'copy' : 'default';
+}
+
+function cms_schema_sync_seed_cms_preferences(PDO $source, PDO $target): array {
+  $table = 'cms_preferences';
+  if (!cms_schema_sync_table_exists($source, $table)) {
+    return ['table' => $table, 'status' => 'skipped', 'reason' => 'source_missing'];
+  }
+  if (!cms_schema_sync_table_exists($target, $table)) {
+    return ['table' => $table, 'status' => 'skipped', 'reason' => 'target_missing'];
+  }
+
+  $targetCount = cms_schema_sync_table_count($target, $table);
+  if ($targetCount > 0) {
+    return [
+      'table' => $table,
+      'status' => 'skipped',
+      'reason' => 'target_not_empty',
+      'target_count' => $targetCount,
+    ];
+  }
+
+  $sourceColumns = cms_schema_sync_table_columns($source, $table);
+  $targetColumns = cms_schema_sync_table_columns($target, $table);
+  $targetColumnMap = array_fill_keys($targetColumns, true);
+
+  $columns = [];
+  foreach ($sourceColumns as $col) {
+    if ($col === 'id') {
+      continue;
+    }
+    if (isset($targetColumnMap[$col])) {
+      $columns[] = $col;
+    }
+  }
+  if (!in_array('name', $columns, true) || !in_array('value', $columns, true)) {
+    return ['table' => $table, 'status' => 'skipped', 'reason' => 'required_columns_missing'];
+  }
+
+  $quotedColumns = array_map(static function (string $col): string {
+    return '`' . str_replace('`', '``', $col) . '`';
+  }, $columns);
+
+  $sourceSelectCols = array_unique(array_merge($columns, ['name', 'value']));
+  if (in_array('migrule', $sourceColumns, true)) {
+    $sourceSelectCols[] = 'migrule';
+  }
+  if (in_array('rule', $sourceColumns, true)) {
+    $sourceSelectCols[] = 'rule';
+  }
+  $sourceSelectQuoted = array_map(static function (string $col): string {
+    return '`' . str_replace('`', '``', $col) . '`';
+  }, $sourceSelectCols);
+  $sourceSql = 'SELECT ' . implode(', ', $sourceSelectQuoted) . ' FROM `cms_preferences` ORDER BY `sort` ASC, `id` ASC';
+  $sourceRows = $source->query($sourceSql)->fetchAll(PDO::FETCH_ASSOC);
+  if ($sourceRows === []) {
+    return ['table' => $table, 'status' => 'skipped', 'reason' => 'source_empty'];
+  }
+
+  $legacyMap = cms_schema_sync_legacy_preferences_map($target);
+  $hasLegacy = ($legacyMap !== []);
+
+  $insertSql = 'INSERT INTO `cms_preferences` (' . implode(', ', $quotedColumns) . ') VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+  $insertStmt = $target->prepare($insertSql);
+
+  $inserted = 0;
+  $copied = 0;
+  foreach ($sourceRows as $row) {
+    $name = (string) ($row['name'] ?? '');
+    $rule = cms_schema_sync_pref_rule($row);
+    if ($name !== '' && $rule === 'copy' && array_key_exists($name, $legacyMap)) {
+      $row['value'] = $legacyMap[$name];
+      $copied++;
+    }
+
+    $values = [];
+    foreach ($columns as $col) {
+      $values[] = $row[$col] ?? null;
+    }
+    $insertStmt->execute($values);
+    $inserted++;
+  }
+
+  return [
+    'table' => $table,
+    'status' => 'seeded',
+    'inserted' => $inserted,
+    'copied_values' => $copied,
+    'legacy_available' => $hasLegacy ? 'yes' : 'no',
+  ];
+}
+
+function cms_schema_sync_seed_bootstrap_data(PDO $source, PDO $target): array {
+  $results = [];
+  $target->exec('SET FOREIGN_KEY_CHECKS=0');
+  try {
+    $results[] = cms_schema_sync_seed_table_from_source($source, $target, 'cms_userrole', null);
+    $results[] = cms_schema_sync_seed_table_from_source($source, $target, 'cms_users', 4);
+    $results[] = cms_schema_sync_seed_cms_preferences($source, $target);
+  } finally {
+    $target->exec('SET FOREIGN_KEY_CHECKS=1');
+  }
+
+  return $results;
+}
