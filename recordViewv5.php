@@ -297,8 +297,8 @@ function cms_get_form_actions(PDO $pdo, array $form): array {
     return [];
   }
 
-  $formIdField = cms_pick_column($formActionCols, ['form_id', 'formid', 'cms_form_id']);
-  $actionIdField = cms_pick_column($formActionCols, ['action_id', 'actionid', 'cms_action_id']);
+  $formIdField = cms_pick_column($formActionCols, ['form_id', 'formid', 'cms_form_id', 'form']);
+  $actionIdField = cms_pick_column($formActionCols, ['action_id', 'actionid', 'cms_action_id', 'action']);
   $sortField = cms_pick_column($formActionCols, ['sort', 'order', 'position']);
   $showField = cms_pick_column($formActionCols, ['showonweb', 'show_on_web']);
   $archivedField = cms_pick_column($formActionCols, ['archived']);
@@ -743,12 +743,15 @@ if (!$errors && $contentTable) {
     }
 
     $aliasName = $name . '__display';
+    $rawAliasName = $name . '__raw';
     $selectParts[] = "{$displayExpr} AS `{$aliasName}`";
+    $selectParts[] = "{$expr} AS `{$rawAliasName}`";
     $columnMeta[$name] = [
       'label' => $col['label'],
       'type' => $col['type'],
       'rule_id' => $col['rule_id'],
       'display' => $aliasName,
+      'raw' => $rawAliasName,
       'expr' => $displayExpr,
       'raw_expr' => $expr,
       'lookup_label' => $lookupLabelField,
@@ -769,6 +772,7 @@ if (!$errors && $contentTable) {
     $expr = $columnMeta[$field]['expr'] ?? $columnMeta[$field]['raw_expr'];
 
     if ($type === 'select') {
+      $expr = $columnMeta[$field]['raw_expr'] ?? $expr;
       $paramKey = ':f_' . $field;
       $where[] = "{$expr} = {$paramKey}";
       $params[$paramKey] = $value;
@@ -879,22 +883,73 @@ if (!$errors && $contentTable) {
                 </select>
               </div>
             </div>
-            <div class="col-sm-6 col-lg-3">
-              <label class="form-label">Page</label>
-              <input type="number" min="1" name="page" value="<?php echo cms_h((string) $page); ?>" class="form-control">
-            </div>
             <div class="col-sm-6 col-lg-2 d-grid">
               <button class="btn btn-outline-primary" type="submit">Apply</button>
             </div>
           </div>
 
           <div class="table-responsive mt-4">
+            <style>
+              .cms-sort-link {
+                color: inherit;
+              }
+              .cms-sort-link:hover {
+                color: inherit;
+              }
+              .cms-sort-arrows {
+                display: inline-flex;
+                flex-direction: column;
+                align-items: center;
+                line-height: 0.72;
+                font-size: 10px;
+                color: #bcc2cc;
+                min-width: 10px;
+              }
+              .cms-sort-arrows .is-active {
+                color: #6a717d;
+                font-weight: 700;
+              }
+            </style>
             <table class="table table-hover align-middle cms-table">
+              <?php
+              $sortBaseQuery = $_GET;
+              $sortBaseQuery['page'] = 1;
+              ?>
               <thead>
                 <tr>
-                  <th>ID</th>
+                  <?php
+                  $idIsCurrentSort = ($sortColumn === $idField);
+                  $idNextDir = ($idIsCurrentSort && $sortDir === 'asc') ? 'desc' : 'asc';
+                  $idUpActive = ($idIsCurrentSort && $sortDir === 'asc');
+                  $idDownActive = ($idIsCurrentSort && $sortDir === 'desc');
+                  $idSortQuery = array_merge($sortBaseQuery, ['sort' => $idField, 'dir' => $idNextDir]);
+                  ?>
+                  <th>
+                    <a class="cms-sort-link text-decoration-none d-flex align-items-center justify-content-between gap-2 w-100" href="?<?php echo cms_h(http_build_query($idSortQuery)); ?>">
+                      <span>ID</span>
+                      <span class="cms-sort-arrows" aria-hidden="true">
+                        <span class="<?php echo $idUpActive ? 'is-active' : ''; ?>">&#8593;</span>
+                        <span class="<?php echo $idDownActive ? 'is-active' : ''; ?>">&#8595;</span>
+                      </span>
+                    </a>
+                  </th>
                   <?php foreach ($columnMeta as $field => $meta): ?>
-                    <th><?php echo cms_h($meta['label']); ?></th>
+                    <?php
+                    $isCurrentSort = ($sortColumn === $field);
+                    $nextDir = ($isCurrentSort && $sortDir === 'asc') ? 'desc' : 'asc';
+                    $upActive = ($isCurrentSort && $sortDir === 'asc');
+                    $downActive = ($isCurrentSort && $sortDir === 'desc');
+                    $sortQuery = array_merge($sortBaseQuery, ['sort' => $field, 'dir' => $nextDir]);
+                    ?>
+                    <th>
+                      <a class="cms-sort-link text-decoration-none d-flex align-items-center justify-content-between gap-2 w-100" href="?<?php echo cms_h(http_build_query($sortQuery)); ?>">
+                        <span><?php echo cms_h($meta['label']); ?></span>
+                        <span class="cms-sort-arrows" aria-hidden="true">
+                          <span class="<?php echo $upActive ? 'is-active' : ''; ?>">&#8593;</span>
+                          <span class="<?php echo $downActive ? 'is-active' : ''; ?>">&#8595;</span>
+                        </span>
+                      </a>
+                    </th>
                   <?php endforeach; ?>
                   <th class="text-center">Action</th>
                 </tr>
@@ -909,20 +964,30 @@ if (!$errors && $contentTable) {
                           <?php
                           $options = [];
                           if ($contentTable) {
-                            $expr = $meta['raw_expr'] ?? $meta['expr'];
-                            $sql = "SELECT DISTINCT {$expr} AS value FROM `{$contentTable}` c ORDER BY {$expr} ASC LIMIT 200";
+                            $expr = $meta['expr'] ?? $meta['raw_expr'];
+                            $rawExpr = $meta['raw_expr'] ?? $expr;
+                            $joinSqlForOptions = $joins ? (' ' . implode(' ', $joins)) : '';
+                            $sql = "SELECT DISTINCT {$rawExpr} AS raw_value, {$expr} AS display_value FROM `{$contentTable}` c{$joinSqlForOptions} ORDER BY {$expr} ASC LIMIT 200";
                             try {
                               $stmt = $pdo->query($sql);
-                              $options = $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
+                              $options = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
                             } catch (Exception $e) {
                               $options = [];
                             }
                           }
                           ?>
                           <?php foreach ($options as $option): ?>
-                            <?php if ($option === null || $option === '') { continue; } ?>
-                            <option value="<?php echo cms_h((string) $option); ?>" <?php echo ((string) $option === (string) $value) ? 'selected' : ''; ?>>
-                              <?php echo cms_h((string) $option); ?>
+                            <?php
+                            $rawOption = (string) ($option['raw_value'] ?? '');
+                            $displayOption = (string) ($option['display_value'] ?? $rawOption);
+                            if ($rawOption === '') { continue; }
+                            $label = $displayOption;
+                            if (!empty($meta['lookup_label']) && $displayOption !== '' && $displayOption !== $rawOption) {
+                              $label = $displayOption . ' [' . $rawOption . ']';
+                            }
+                            ?>
+                            <option value="<?php echo cms_h($rawOption); ?>" <?php echo ($rawOption === (string) $value) ? 'selected' : ''; ?>>
+                              <?php echo cms_h($label); ?>
                             </option>
                           <?php endforeach; ?>
                         </select>
@@ -944,7 +1009,13 @@ if (!$errors && $contentTable) {
                     <tr>
                       <td><?php echo cms_h((string) $row['__record_id']); ?></td>
                       <?php foreach ($columnMeta as $field => $meta): ?>
-                        <?php $display = $row[$meta['display']] ?? ''; ?>
+                        <?php
+                        $display = (string) ($row[$meta['display']] ?? '');
+                        $rawValue = (string) ($row[$meta['raw']] ?? '');
+                        if (!empty($meta['lookup_label']) && $display !== '' && $rawValue !== '' && $display !== $rawValue) {
+                          $display = $display . ' [' . $rawValue . ']';
+                        }
+                        ?>
                         <?php $ruleId = (int) ($meta['rule_id'] ?? 0); ?>
                         <?php $rule = $ruleId && isset($viewRules[$ruleId]) ? $viewRules[$ruleId] : null; ?>
                         <td><?php echo cms_render_rule_value($display, $rule); ?></td>
