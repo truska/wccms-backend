@@ -297,8 +297,8 @@ function cms_get_form_actions(PDO $pdo, array $form): array {
     return [];
   }
 
-  $formIdField = cms_pick_column($formActionCols, ['form_id', 'formid', 'cms_form_id']);
-  $actionIdField = cms_pick_column($formActionCols, ['action_id', 'actionid', 'cms_action_id']);
+  $formIdField = cms_pick_column($formActionCols, ['form_id', 'formid', 'cms_form_id', 'form']);
+  $actionIdField = cms_pick_column($formActionCols, ['action_id', 'actionid', 'cms_action_id', 'action']);
   $sortField = cms_pick_column($formActionCols, ['sort', 'order', 'position']);
   $showField = cms_pick_column($formActionCols, ['showonweb', 'show_on_web']);
   $archivedField = cms_pick_column($formActionCols, ['archived']);
