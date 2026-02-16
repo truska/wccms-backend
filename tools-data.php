@@ -21,6 +21,29 @@ function td_h(string $value): string {
   return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 
+function td_detect_host_ip(): string {
+  $serverAddr = trim((string) ($_SERVER['SERVER_ADDR'] ?? ''));
+  if ($serverAddr !== '') {
+    return $serverAddr;
+  }
+
+  $localAddr = trim((string) ($_SERVER['LOCAL_ADDR'] ?? ''));
+  if ($localAddr !== '') {
+    return $localAddr;
+  }
+
+  $httpHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
+  $host = trim((string) preg_replace('/:\d+$/', '', $httpHost));
+  if ($host !== '') {
+    $resolved = gethostbyname($host);
+    if ($resolved !== '' && $resolved !== $host) {
+      return $resolved;
+    }
+  }
+
+  return 'unknown';
+}
+
 function td_load_target_runtime(string $targetConfigPath): array {
   $DB_OK = false;
   $DB_ERROR = null;
@@ -67,6 +90,7 @@ $targetConfigPath = (string) ($_POST['target_config'] ?? $defaultTargetConfig);
 $masterConfigPath = (string) ($_POST['master_config'] ?? $defaultMasterConfig);
 $tablePrefix = trim((string) ($_POST['table_prefix'] ?? 'cms_'));
 $action = (string) ($_POST['action'] ?? 'check');
+$hostIp = td_detect_host_ip();
 
 $message = '';
 $error = '';
@@ -217,6 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         | Version: <code><?php echo td_h($toolMeta['version']); ?></code>
         | Updated: <code><?php echo td_h($toolMeta['updated_at']); ?></code>
       </p>
+      <p class="small">Host IP: <code><?php echo td_h($hostIp); ?></code></p>
       <p class="small">URL: <code>/wccms/tools-data.php</code></p>
     </div>
 
@@ -259,6 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if (is_array($targetRuntime)): ?>
           <div class="card col">
             <h2>Target DB Runtime</h2>
+            <p><strong>Server Host IP:</strong> <code><?php echo td_h($hostIp); ?></code></p>
             <p><strong>Config Source:</strong> <code><?php echo td_h((string) ($targetRuntime['DB_CONFIG_SOURCE'] ?? 'unknown')); ?></code></p>
             <p><strong>Host:</strong> <code><?php echo td_h((string) ($targetRuntime['DB_HOST'] ?? '')); ?></code></p>
             <p><strong>Name:</strong> <code><?php echo td_h((string) ($targetRuntime['DB_NAME'] ?? '')); ?></code></p>
@@ -279,6 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if (is_array($masterRuntime)): ?>
           <div class="card col">
             <h2>Master DB Runtime</h2>
+            <p><strong>Server Host IP:</strong> <code><?php echo td_h($hostIp); ?></code></p>
             <p><strong>Config Source:</strong> <code><?php echo td_h((string) ($masterRuntime['DB_CONFIG_SOURCE'] ?? 'unknown')); ?></code></p>
             <p><strong>Host:</strong> <code><?php echo td_h((string) ($masterRuntime['DB_HOST'] ?? '')); ?></code></p>
             <p><strong>Name:</strong> <code><?php echo td_h((string) ($masterRuntime['DB_NAME'] ?? '')); ?></code></p>

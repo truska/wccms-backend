@@ -231,7 +231,7 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
     <div class="cms-sidebar-footer">
       <img src="<?php echo $baseURL; ?>/filestore/images/logos/<?php echo cms_h($cmsSidebarLogo !== '' ? $cmsSidebarLogo : 'witecanvas-logo-s.png'); ?>" alt="wITeCanvas" class="cms-sidebar-logo">
       <div>© wITeCanvas 2020 - 2026</div>
-      <div>Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '1.0'); ?></div>
+      <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '1.0'); ?></div>
     </div>
   </div>
 </aside>
