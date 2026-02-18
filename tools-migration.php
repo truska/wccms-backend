@@ -7,8 +7,8 @@ cms_require_login();
 
 $toolMeta = [
   'id' => 'tools-migration',
-  'version' => 'v1.0.0',
-  'updated_at' => '2026-02-16 15:05 UTC',
+  'version' => 'v1.1.0',
+  'updated_at' => '2026-02-18 13:35 UTC',
 ];
 
 function tm_h(string $value): string {
@@ -207,10 +207,42 @@ function tm_run_migration(PDO $pdo, string $migrationsDir, string $fileName): ar
   ];
 }
 
+function tm_run_sync_script(string $scriptPath, string $siteWebRoot, string $branch): array {
+  if (!is_file($scriptPath)) {
+    throw new RuntimeException('Sync script not found: ' . $scriptPath);
+  }
+  if ($siteWebRoot === '' || $siteWebRoot[0] !== '/' || !is_dir($siteWebRoot)) {
+    throw new RuntimeException('Site web root must be an existing absolute path.');
+  }
+  if (!preg_match('/^[A-Za-z0-9._\\/-]+$/', $branch)) {
+    throw new RuntimeException('Invalid branch name.');
+  }
+
+  $cmd = 'bash '
+    . escapeshellarg($scriptPath) . ' '
+    . escapeshellarg($siteWebRoot) . ' '
+    . escapeshellarg($branch)
+    . ' 2>&1';
+
+  $output = [];
+  $exitCode = 0;
+  exec($cmd, $output, $exitCode);
+
+  return [
+    'command' => $cmd,
+    'output' => $output,
+    'exit_code' => $exitCode,
+  ];
+}
+
 $privateDir = realpath(__DIR__ . '/../../private') ?: (__DIR__ . '/../../private');
 $defaultTargetConfig = rtrim($privateDir, '/') . '/dbcon.php';
 $targetConfigPath = (string) ($_POST['target_config'] ?? $defaultTargetConfig);
 $migrationsDir = __DIR__ . '/sql/migrations';
+$syncScriptPath = __DIR__ . '/scripts/wccms-sync.sh';
+$defaultSyncSiteWebRoot = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
+$syncSiteWebRoot = trim((string) ($_POST['sync_site_web_root'] ?? $defaultSyncSiteWebRoot));
+$syncBranch = trim((string) ($_POST['sync_branch'] ?? 'staging'));
 $action = (string) ($_POST['action'] ?? '');
 
 $message = '';
@@ -219,6 +251,25 @@ $results = [];
 $runtime = null;
 $migrationFiles = [];
 $applied = [];
+$syncRan = false;
+$syncExitCode = null;
+$syncOutput = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'sync_backend') {
+  try {
+    $syncResult = tm_run_sync_script($syncScriptPath, $syncSiteWebRoot, $syncBranch);
+    $syncRan = true;
+    $syncExitCode = (int) ($syncResult['exit_code'] ?? 1);
+    $syncOutput = array_map('strval', (array) ($syncResult['output'] ?? []));
+    if ($syncExitCode === 0) {
+      $message = 'Backend sync completed successfully.';
+    } else {
+      $error = 'Backend sync failed with exit code ' . $syncExitCode . '.';
+    }
+  } catch (Throwable $e) {
+    $error = $e->getMessage();
+  }
+}
 
 try {
   $runtime = tm_load_target_runtime($targetConfigPath);
@@ -229,7 +280,7 @@ try {
   $migrationFiles = tm_list_migration_files($migrationsDir);
   $applied = tm_get_applied_migrations($pdo);
 
-  if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['run_next', 'run_all', 'run_one'], true)) {
     if (!$migrationFiles) {
       throw new RuntimeException('No migration files found.');
     }
@@ -315,6 +366,36 @@ include __DIR__ . '/includes/header.php';
           | Updated: <code><?php echo tm_h($toolMeta['updated_at']); ?></code>
         </p>
       </div>
+    </div>
+
+    <div class="cms-card">
+      <h2 class="h5 mb-3">Backend Git Sync</h2>
+      <p class="text-muted mb-3">Pull latest backend code via <code>/wccms/scripts/wccms-sync.sh</code>.</p>
+      <form method="post" action="<?php echo $CMS_BASE_URL; ?>/tools-migration.php" class="mb-3">
+        <div class="row g-3 align-items-end">
+          <div class="col-lg-6">
+            <label class="form-label" for="sync_site_web_root">Site Web Root</label>
+            <input class="form-control" type="text" id="sync_site_web_root" name="sync_site_web_root" value="<?php echo tm_h($syncSiteWebRoot); ?>" required>
+          </div>
+          <div class="col-lg-3">
+            <label class="form-label" for="sync_branch">Branch</label>
+            <input class="form-control" type="text" id="sync_branch" name="sync_branch" value="<?php echo tm_h($syncBranch); ?>" required>
+          </div>
+          <div class="col-lg-3">
+            <button class="btn btn-outline-primary w-100" type="submit" name="action" value="sync_backend">Pull Backend Now</button>
+          </div>
+        </div>
+      </form>
+      <?php if ($syncRan): ?>
+        <div class="alert <?php echo ($syncExitCode === 0) ? 'alert-success' : 'alert-danger'; ?> mb-0">
+          Exit code: <strong><?php echo (int) $syncExitCode; ?></strong>
+        </div>
+      <?php endif; ?>
+      <?php if (!empty($syncOutput)): ?>
+        <div class="mt-2">
+          <pre class="small mb-0 p-2 bg-light border rounded"><?php echo tm_h(implode("\n", $syncOutput)); ?></pre>
+        </div>
+      <?php endif; ?>
     </div>
 
     <div class="cms-card">
