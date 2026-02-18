@@ -178,6 +178,33 @@ function cms_fetch_gallery_items(PDO $pdo, int $formId, int $recordId): array {
   return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
+function cms_media_variant_exists(string $mediatype, string $folder, string $filename, string $size): bool {
+  if ($filename === '') {
+    return false;
+  }
+  $basePath = cms_media_path($mediatype, $folder, $size);
+  if (is_file($basePath . $filename)) {
+    return true;
+  }
+  if (preg_match('/\\.(jpe?g|png|gif)$/i', $filename)) {
+    $webp = preg_replace('/\\.[^.]+$/', '.webp', $filename);
+    if ($webp && is_file($basePath . $webp)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function cms_gallery_thumb_url(array $item): string {
+  $folderName = (string) ($item['folder_name'] ?? '');
+  $parts = array_values(array_filter(explode('/', trim($folderName, '/'))));
+  $mediatype = $parts[0] ?? 'images';
+  $folder = implode('/', array_slice($parts, 1));
+  $filename = (string) ($item['image'] ?? '');
+  $size = cms_media_variant_exists($mediatype, $folder, $filename, 'xs') ? 'xs' : 'master';
+  return cms_media_url($mediatype, $folder, $filename, $size, true);
+}
+
 /**
  * Map a CMS field type label to an HTML input type.
  */
@@ -1003,11 +1030,7 @@ if (!isset($galleryItems)) {
                         <div class="cms-gallery-list" data-gallery>
                           <?php foreach ($galleryItems as $item): ?>
                             <?php
-                              $folderName = (string) ($item['folder_name'] ?? '');
-                              $parts = array_values(array_filter(explode('/', trim($folderName, '/'))));
-                              $mediatype = $parts[0] ?? 'images';
-                              $folder = implode('/', array_slice($parts, 1));
-                              $thumbUrl = cms_media_url($mediatype, $folder, (string) ($item['image'] ?? ''), 'xs', true);
+                              $thumbUrl = cms_gallery_thumb_url($item);
                             ?>
                             <div class="cms-gallery-item" draggable="true" data-id="<?php echo (int) ($item['id'] ?? 0); ?>">
                               <div class="cms-gallery-thumb">
@@ -1163,11 +1186,7 @@ if (!isset($galleryItems)) {
                     <div class="cms-gallery-list" data-gallery>
                       <?php foreach ($galleryItems as $item): ?>
                         <?php
-                          $folderName = (string) ($item['folder_name'] ?? '');
-                          $parts = array_values(array_filter(explode('/', trim($folderName, '/'))));
-                          $mediatype = $parts[0] ?? 'images';
-                          $folder = implode('/', array_slice($parts, 1));
-                          $thumbUrl = cms_media_url($mediatype, $folder, (string) ($item['image'] ?? ''), 'xs', true);
+                          $thumbUrl = cms_gallery_thumb_url($item);
                         ?>
                         <div class="cms-gallery-item" draggable="true" data-id="<?php echo (int) ($item['id'] ?? 0); ?>">
                           <div class="cms-gallery-thumb">

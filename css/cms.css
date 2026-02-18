@@ -258,7 +258,7 @@ a.link-email:focus {
 
 .cms-gallery-item {
   display: grid;
-  grid-template-columns: 84px 1fr auto;
+  grid-template-columns: clamp(84px, 12vw, 140px) 1fr auto;
   gap: 1rem;
   padding: 1rem;
   border: 1px solid var(--cms-border);
@@ -273,10 +273,12 @@ a.link-email:focus {
 }
 
 .cms-gallery-thumb img {
-  width: 84px;
-  height: 84px;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
   border-radius: 10px;
-  object-fit: cover;
+  object-fit: contain;
   background: #f0f2f6;
 }
 
