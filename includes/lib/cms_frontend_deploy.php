@@ -80,6 +80,7 @@ function cms_frontend_detect_site_root(): ?string {
   }
 
   $candidates[] = dirname(__DIR__, 4);
+  $candidates[] = dirname(__DIR__, 3);
   $candidates[] = getcwd() ?: '';
 
   foreach ($candidates as $candidate) {
@@ -93,8 +94,12 @@ function cms_frontend_detect_site_root(): ?string {
     }
 
     $root = $candidate;
-    if (basename($candidate) === 'web') {
+    $base = basename($candidate);
+    if ($base === 'wccms' || $base === 'web') {
       $root = dirname($candidate);
+    }
+    if (basename($root) === 'web') {
+      $root = dirname($root);
     }
 
     $realRoot = realpath($root);
@@ -193,6 +198,19 @@ function cms_frontend_run_release(string $scriptPath, string $mode, array $extra
     ];
   }
 
+  return cms_frontend_run_command([$scriptReal, $mode], null, $extraEnv);
+}
+
+function cms_frontend_run_command(array $command, ?string $cwd = null, array $extraEnv = []): array {
+  if (!cms_frontend_can_exec()) {
+    return [
+      'exit_code' => 125,
+      'stdout' => '',
+      'stderr' => 'Command execution disabled in PHP runtime.',
+      'output' => 'Command execution disabled in PHP runtime.',
+    ];
+  }
+
   $descriptors = [
     0 => ['pipe', 'r'],
     1 => ['pipe', 'w'],
@@ -211,13 +229,13 @@ function cms_frontend_run_release(string $scriptPath, string $mode, array $extra
     }
   }
 
-  $process = proc_open([$scriptReal, $mode], $descriptors, $pipes, null, $env);
+  $process = proc_open($command, $descriptors, $pipes, $cwd, $env);
   if (!is_resource($process)) {
     return [
       'exit_code' => 124,
       'stdout' => '',
-      'stderr' => 'Unable to start release process.',
-      'output' => 'Unable to start release process.',
+      'stderr' => 'Unable to start process.',
+      'output' => 'Unable to start process.',
     ];
   }
 
@@ -238,6 +256,70 @@ function cms_frontend_run_release(string $scriptPath, string $mode, array $extra
     'stderr' => $stderr,
     'output' => $output,
   ];
+}
+
+function cms_frontend_backend_repo_path(string $siteRoot): string {
+  return rtrim($siteRoot, '/') . '/web/wccms';
+}
+
+function cms_frontend_run_backend_deploy(string $siteRoot): array {
+  $repoPath = cms_frontend_backend_repo_path($siteRoot);
+  if (!is_dir($repoPath)) {
+    return [
+      'exit_code' => 127,
+      'stdout' => '',
+      'stderr' => 'Backend path not found: ' . $repoPath,
+      'output' => 'Backend path not found: ' . $repoPath,
+    ];
+  }
+  if (!is_dir($repoPath . '/.git')) {
+    return [
+      'exit_code' => 127,
+      'stdout' => '',
+      'stderr' => 'Backend path is not a git repo: ' . $repoPath,
+      'output' => 'Backend path is not a git repo: ' . $repoPath,
+    ];
+  }
+
+  $branchResult = cms_frontend_run_command(['git', '-C', $repoPath, 'rev-parse', '--abbrev-ref', 'HEAD']);
+  $branch = trim((string) ($branchResult['stdout'] ?? ''));
+  if ($branch === '' || $branch === 'HEAD') {
+    $branch = 'main';
+  }
+
+  $fetch = cms_frontend_run_command(['git', '-C', $repoPath, 'fetch', 'origin']);
+  if ((int) ($fetch['exit_code'] ?? 1) !== 0) {
+    $fetch['output'] = trim("[backend] fetch failed on branch {$branch}\n" . (string) ($fetch['output'] ?? ''));
+    return $fetch;
+  }
+
+  $pull = cms_frontend_run_command(['git', '-C', $repoPath, 'pull', '--ff-only', 'origin', $branch]);
+  $combined = trim(implode("\n", array_filter([
+    "[backend] repo={$repoPath}",
+    "[backend] branch={$branch}",
+    (string) ($fetch['output'] ?? ''),
+    (string) ($pull['output'] ?? ''),
+  ])));
+  $pull['output'] = $combined;
+  return $pull;
+}
+
+function cms_frontend_start_job(PDO $pdo, string $siteRoot, string $jobType, ?int $requestedBy): int {
+  $stmt = $pdo->prepare(
+    'INSERT INTO cms_deploy_jobs
+      (site_root, job_type, status, requested_by, requested_at, started_at, showonweb, archived)
+     VALUES
+      (:site_root, :job_type, :status, :requested_by, NOW(), NOW(), :showonweb, :archived)'
+  );
+  $stmt->execute([
+    ':site_root' => $siteRoot,
+    ':job_type' => $jobType,
+    ':status' => 'running',
+    ':requested_by' => $requestedBy,
+    ':showonweb' => 'Yes',
+    ':archived' => 0,
+  ]);
+  return (int) $pdo->lastInsertId();
 }
 
 function cms_frontend_jobs_table_exists(PDO $pdo): bool {
@@ -277,29 +359,34 @@ function cms_frontend_queue_deploy_job(PDO $pdo, string $siteRoot, ?int $request
   return (int) $pdo->lastInsertId();
 }
 
-function cms_frontend_list_jobs(PDO $pdo, string $siteRoot, int $limit = 20): array {
+function cms_frontend_list_jobs(PDO $pdo, string $siteRoot, int $limit = 20, ?string $jobType = null): array {
   $limit = max(1, min(200, $limit));
+  $typeSql = '';
+  $params = [
+    ':site_root' => $siteRoot,
+  ];
+  if ($jobType !== null && $jobType !== '') {
+    $typeSql = ' AND j.job_type = :job_type ';
+    $params[':job_type'] = $jobType;
+  }
   $sql = 'SELECT j.id, j.site_root, j.job_type, j.status, j.requested_by, j.requested_at,
                  j.started_at, j.finished_at, j.exit_code, j.output_text, u.username
           FROM cms_deploy_jobs j
           LEFT JOIN cms_users u ON u.id = j.requested_by
           WHERE j.site_root = :site_root
-            AND j.job_type = :job_type
             AND j.archived = 0
+            ' . $typeSql . '
           ORDER BY j.id DESC
           LIMIT ' . $limit;
 
   $stmt = $pdo->prepare($sql);
-  $stmt->execute([
-    ':site_root' => $siteRoot,
-    ':job_type' => 'frontend_deploy',
-  ]);
+  $stmt->execute($params);
 
   return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
 function cms_frontend_get_latest_job(PDO $pdo, string $siteRoot): ?array {
-  $jobs = cms_frontend_list_jobs($pdo, $siteRoot, 1);
+  $jobs = cms_frontend_list_jobs($pdo, $siteRoot, 1, 'frontend_deploy');
   return $jobs[0] ?? null;
 }
 
