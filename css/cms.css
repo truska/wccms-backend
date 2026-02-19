@@ -390,7 +390,17 @@ a.link-email:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+.cms-content-header > :first-child {
+  min-width: 0;
+}
+
+.cms-content-header h1 {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Tables and filters */
