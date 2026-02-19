@@ -19,7 +19,7 @@ if (!$authorized) {
     <?php include __DIR__ . '/includes/menu.php'; ?>
     <main class="cms-content">
       <div class="cms-content-header">
-        <h1 class="h3 mb-0">Frontend Deploy</h1>
+        <h1 class="h3 mb-0">Deploy Tools</h1>
       </div>
       <div class="alert alert-danger" role="alert">
         Access denied. This tool requires role <?php echo cms_h((string) $minRole); ?> or higher.
@@ -39,17 +39,24 @@ $csrfToken = (string) $_SESSION['cms_frontend_csrf'];
 $siteRoot = cms_frontend_detect_site_root();
 $siteRootError = '';
 if ($siteRoot === null) {
-  $siteRootError = 'Unable to resolve a valid site root under /var/www with a web/ directory.';
+  $fallbackRoot = realpath(dirname(__DIR__, 2));
+  if (is_string($fallbackRoot) && $fallbackRoot !== '' && cms_frontend_is_allowed_site_root($fallbackRoot)) {
+    $siteRoot = $fallbackRoot;
+  } else {
+    $siteRootError = 'Unable to resolve a valid site root under /var/www with a web/ directory.';
+  }
 }
 
 $repoName = cms_frontend_repo_name();
 $repoPath = $siteRoot ? cms_frontend_repo_path($siteRoot) : '';
 $releaseScriptPath = $siteRoot ? cms_frontend_release_script_path($siteRoot) : '';
+$backendRepoPath = $siteRoot ? cms_frontend_backend_repo_path($siteRoot) : '';
 
 $message = '';
 $error = '';
-$checkOutput = '';
-$checkExitCode = null;
+$outputText = '';
+$outputExitCode = null;
+$outputTitle = '';
 $jobs = [];
 
 $jobsTableOk = $hasDb && cms_frontend_jobs_table_exists($pdo);
@@ -70,35 +77,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   } else {
     $action = (string) ($_POST['action'] ?? '');
 
-    if ($action === 'queue_deploy') {
+    if ($action === 'run_frontend_deploy') {
       try {
-        $jobId = cms_frontend_queue_deploy_job($pdo, $siteRoot, (int) ($CMS_USER['id'] ?? 0));
-        $message = 'Deploy job queued: #' . $jobId;
-        cms_log_action('frontend_deploy_queue', 'cms_deploy_jobs', $jobId, null, 'tools-frontend', 'cms');
+        $jobId = cms_frontend_start_job($pdo, $siteRoot, 'frontend_deploy', (int) ($CMS_USER['id'] ?? 0));
+        $result = cms_frontend_run_release($releaseScriptPath, 'deploy', [
+          'FRONTEND_REPO' => $repoPath,
+          'FRONTEND_REPO_NAME' => $repoName,
+        ]);
+        $outputExitCode = (int) ($result['exit_code'] ?? 1);
+        $outputText = (string) ($result['output'] ?? '');
+        $outputTitle = 'Frontend Deploy Output';
+        $status = ($outputExitCode === 0) ? 'success' : 'failed';
+        cms_frontend_finish_job($pdo, $jobId, $status, $outputExitCode, $outputText);
+        if ($status === 'success') {
+          $message = 'Frontend deploy completed (job #' . $jobId . ').';
+        } else {
+          $error = 'Frontend deploy failed (job #' . $jobId . ', exit ' . $outputExitCode . ').';
+        }
+        cms_log_action('frontend_deploy_run', 'cms_deploy_jobs', $jobId, null, 'tools-frontend', 'cms');
       } catch (Throwable $e) {
-        $error = 'Unable to queue deploy job: ' . $e->getMessage();
+        $error = 'Unable to run frontend deploy: ' . $e->getMessage();
+      }
+    } elseif ($action === 'run_backend_deploy') {
+      try {
+        $jobId = cms_frontend_start_job($pdo, $siteRoot, 'backend_deploy', (int) ($CMS_USER['id'] ?? 0));
+        $result = cms_frontend_run_backend_deploy($siteRoot);
+        $outputExitCode = (int) ($result['exit_code'] ?? 1);
+        $outputText = (string) ($result['output'] ?? '');
+        $outputTitle = 'Backend Deploy Output';
+        $status = ($outputExitCode === 0) ? 'success' : 'failed';
+        cms_frontend_finish_job($pdo, $jobId, $status, $outputExitCode, $outputText);
+        if ($status === 'success') {
+          $message = 'Backend deploy completed (job #' . $jobId . ').';
+        } else {
+          $error = 'Backend deploy failed (job #' . $jobId . ', exit ' . $outputExitCode . ').';
+        }
+        cms_log_action('backend_deploy_run', 'cms_deploy_jobs', $jobId, null, 'tools-frontend', 'cms');
+      } catch (Throwable $e) {
+        $error = 'Unable to run backend deploy: ' . $e->getMessage();
       }
     } elseif ($action === 'check_status') {
       $result = cms_frontend_run_release($releaseScriptPath, 'check', [
         'FRONTEND_REPO' => $repoPath,
         'FRONTEND_REPO_NAME' => $repoName,
       ]);
-      $checkExitCode = (int) ($result['exit_code'] ?? 1);
-      $checkOutput = (string) ($result['output'] ?? '');
+      $outputExitCode = (int) ($result['exit_code'] ?? 1);
+      $outputText = (string) ($result['output'] ?? '');
+      $outputTitle = 'Frontend Status Check Output';
 
-      if ($checkExitCode === 125) {
-        $latest = cms_frontend_get_latest_job($pdo, $siteRoot);
-        if ($latest) {
-          $message = 'Runtime execution is disabled; showing latest worker job status instead.';
-          $checkOutput = (string) ($latest['output_text'] ?? '');
-          $checkExitCode = isset($latest['exit_code']) ? (int) $latest['exit_code'] : null;
-        } else {
-          $error = 'Runtime execution is disabled and no previous jobs were found.';
-        }
-      } elseif ($checkExitCode === 0) {
+      if ($outputExitCode === 0) {
         $message = 'Frontend status check completed successfully.';
       } else {
-        $error = 'Frontend status check failed (exit ' . $checkExitCode . ').';
+        $error = 'Frontend status check failed (exit ' . $outputExitCode . ').';
       }
 
       cms_log_action('frontend_deploy_check', 'cms_deploy_jobs', null, null, 'tools-frontend', 'cms');
@@ -108,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if ($hasDb && $jobsTableOk && $siteRoot !== null) {
   try {
-    $jobs = cms_frontend_list_jobs($pdo, $siteRoot, 20);
+    $jobs = cms_frontend_list_jobs($pdo, $siteRoot, 20, null);
   } catch (Throwable $e) {
     if ($error === '') {
       $error = 'Failed to load job history: ' . $e->getMessage();
@@ -123,7 +153,7 @@ include __DIR__ . '/includes/header.php';
   <?php include __DIR__ . '/includes/menu.php'; ?>
   <main class="cms-content">
     <div class="cms-content-header">
-      <h1 class="h3 mb-0">Frontend Deploy</h1>
+      <h1 class="h3 mb-0">Deploy Tools</h1>
     </div>
 
     <?php if ($message !== ''): ?>
@@ -144,6 +174,8 @@ include __DIR__ . '/includes/header.php';
         <dd><code><?php echo cms_h($repoName); ?></code></dd>
         <dt>Release script</dt>
         <dd><code><?php echo cms_h($releaseScriptPath !== '' ? $releaseScriptPath : 'unresolved'); ?></code></dd>
+        <dt>Backend repo path</dt>
+        <dd><code><?php echo cms_h($backendRepoPath !== '' ? $backendRepoPath : 'unresolved'); ?></code></dd>
         <dt>Required role</dt>
         <dd><?php echo cms_h((string) $minRole); ?>+</dd>
       </dl>
@@ -159,17 +191,22 @@ include __DIR__ . '/includes/header.php';
         </form>
         <form method="post" action="">
           <input type="hidden" name="csrf_token" value="<?php echo cms_h($csrfToken); ?>">
-          <input type="hidden" name="action" value="queue_deploy">
-          <button class="btn btn-primary" type="submit"<?php echo $siteRoot === null ? ' disabled' : ''; ?>>Queue Deploy</button>
+          <input type="hidden" name="action" value="run_frontend_deploy">
+          <button class="btn btn-primary" type="submit"<?php echo $siteRoot === null ? ' disabled' : ''; ?>>Run Frontend Deploy Now</button>
+        </form>
+        <form method="post" action="">
+          <input type="hidden" name="csrf_token" value="<?php echo cms_h($csrfToken); ?>">
+          <input type="hidden" name="action" value="run_backend_deploy">
+          <button class="btn btn-outline-secondary" type="submit"<?php echo $siteRoot === null ? ' disabled' : ''; ?>>Run Backend Deploy Now</button>
         </form>
       </div>
-      <p class="text-muted small mt-3 mb-0">Deploys are queued only. Worker/cron executes queued jobs outside web requests.</p>
+      <p class="text-muted small mt-3 mb-0">Deploy runs immediately in this request and is logged in `cms_deploy_jobs`.</p>
     </div>
 
-    <?php if ($checkOutput !== ''): ?>
+    <?php if ($outputText !== ''): ?>
       <div class="cms-card mb-4">
-        <h2 class="h5">Latest Check Output<?php echo $checkExitCode !== null ? ' (exit ' . cms_h((string) $checkExitCode) . ')' : ''; ?></h2>
-        <pre class="mb-0" style="white-space: pre-wrap;"><?php echo cms_h($checkOutput); ?></pre>
+        <h2 class="h5"><?php echo cms_h($outputTitle !== '' ? $outputTitle : 'Command Output'); ?><?php echo $outputExitCode !== null ? ' (exit ' . cms_h((string) $outputExitCode) . ')' : ''; ?></h2>
+        <pre class="mb-0" style="white-space: pre-wrap;"><?php echo cms_h($outputText); ?></pre>
       </div>
     <?php endif; ?>
 
@@ -183,6 +220,7 @@ include __DIR__ . '/includes/header.php';
             <thead>
               <tr>
                 <th>ID</th>
+                <th>Type</th>
                 <th>Status</th>
                 <th>Requested By</th>
                 <th>Requested At</th>
@@ -211,6 +249,7 @@ include __DIR__ . '/includes/header.php';
                 ?>
                 <tr>
                   <td><?php echo cms_h((string) $job['id']); ?></td>
+                  <td><?php echo cms_h((string) ($job['job_type'] ?? '')); ?></td>
                   <td><span class="badge bg-<?php echo cms_h($badgeClass); ?>"><?php echo cms_h($status); ?></span></td>
                   <td><?php echo cms_h($requestedBy); ?></td>
                   <td><?php echo cms_h((string) ($job['requested_at'] ?? '')); ?></td>
