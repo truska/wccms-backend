@@ -159,7 +159,9 @@
     const activeInput = form.querySelector('input[name="active_tab"]');
     const tabScope = form.closest('.cms-card') || document;
     const tabButtons = tabScope.querySelectorAll('[data-bs-toggle="tab"]');
+    const saveButton = form.querySelector('.cms-save-button[type="submit"], .cms-save-button');
     let invalidJumpActive = false;
+    let uploadSubmitPending = false;
 
     const normalizeTarget = (targetId) => (targetId.startsWith('#') ? targetId : `#${targetId}`);
 
@@ -228,6 +230,24 @@
 
       focusInvalid();
     }, true);
+
+    form.addEventListener('submit', () => {
+      if (uploadSubmitPending) {
+        return;
+      }
+      const hasUpload = Array.from(form.querySelectorAll('input[type="file"]'))
+        .some((input) => input.files && input.files.length > 0);
+      if (!hasUpload || !saveButton) {
+        return;
+      }
+      uploadSubmitPending = true;
+      saveButton.disabled = true;
+      saveButton.setAttribute('aria-disabled', 'true');
+      if (!saveButton.getAttribute('data-original-html')) {
+        saveButton.setAttribute('data-original-html', saveButton.innerHTML);
+      }
+      saveButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Saving...';
+    });
   });
 
   // Live filter submit for recordView list controls.
