@@ -157,7 +157,9 @@
     const recordId = form.getAttribute('data-record-id') || '0';
     const storageKey = `cms_active_tab_${location.pathname}_${formId}_${recordId}`;
     const activeInput = form.querySelector('input[name="active_tab"]');
-    const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
+    const tabScope = form.closest('.cms-card') || document;
+    const tabButtons = tabScope.querySelectorAll('[data-bs-toggle="tab"]');
+    let invalidJumpActive = false;
 
     const normalizeTarget = (targetId) => (targetId.startsWith('#') ? targetId : `#${targetId}`);
 
@@ -188,6 +190,44 @@
         sessionStorage.setItem(storageKey, normalized);
       });
     });
+
+    form.addEventListener('invalid', (event) => {
+      if (invalidJumpActive) {
+        return;
+      }
+      const firstInvalid = form.querySelector(':invalid');
+      if (!firstInvalid) {
+        return;
+      }
+      event.preventDefault();
+      invalidJumpActive = true;
+
+      const focusInvalid = () => {
+        firstInvalid.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        firstInvalid.focus({ preventScroll: true });
+        firstInvalid.reportValidity();
+        invalidJumpActive = false;
+      };
+
+      const pane = firstInvalid.closest('.tab-pane');
+      if (pane && pane.id && !pane.classList.contains('active')) {
+        const target = `#${pane.id}`;
+        const button = Array.from(tabButtons).find((btn) => btn.getAttribute('data-bs-target') === target);
+        if (button && window.bootstrap) {
+          const instance = bootstrap.Tab.getOrCreateInstance(button);
+          instance.show();
+          window.setTimeout(focusInvalid, 180);
+          return;
+        }
+        if (button) {
+          button.click();
+          window.setTimeout(focusInvalid, 180);
+          return;
+        }
+      }
+
+      focusInvalid();
+    }, true);
   });
 
   // Live filter submit for recordView list controls.
