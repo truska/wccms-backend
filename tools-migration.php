@@ -440,8 +440,8 @@ include __DIR__ . '/includes/header.php';
 
     <div class="cms-card">
       <h2 class="h5 mb-3">Migration List</h2>
-      <div class="table-responsive">
-        <table class="table table-sm align-middle">
+      <div class="table-responsive cms-record-grid-wrap">
+        <table class="table table-sm align-middle cms-record-grid">
           <thead>
             <tr>
               <th>Migration</th>

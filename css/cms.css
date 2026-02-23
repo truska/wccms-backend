@@ -420,6 +420,69 @@ a.link-email:focus {
   background: #f1f3f6;
 }
 
+/* Contained/wrapping variant for dense record grids */
+.cms-record-grid-wrap {
+  max-width: 100%;
+}
+
+.cms-record-grid {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.cms-record-grid th,
+.cms-record-grid td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: top;
+}
+
+.cms-record-grid .cms-sort-link {
+  min-width: 0;
+}
+
+.cms-record-grid .cms-sort-link > span:first-child {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.cms-record-grid th.cms-record-id,
+.cms-record-grid td.cms-record-id {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.cms-record-grid th.cms-record-actions,
+.cms-record-grid td.cms-record-actions {
+  width: 1%;
+  min-width: 7rem;
+  white-space: nowrap;
+}
+
+.cms-sort-link {
+  color: inherit;
+}
+
+.cms-sort-link:hover {
+  color: inherit;
+}
+
+.cms-sort-arrows {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.72;
+  font-size: 10px;
+  color: #bcc2cc;
+  min-width: 10px;
+}
+
+.cms-sort-arrows .is-active {
+  color: #6a717d;
+  font-weight: 700;
+}
+
 .cms-action-buttons {
   display: inline-flex;
   gap: 0.4rem;

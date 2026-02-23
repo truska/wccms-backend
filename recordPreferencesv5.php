@@ -336,8 +336,8 @@ if (!$tabs) {
             <div class="tab-pane fade <?php echo $tabKey === $activeTab ? 'show active' : ''; ?>" id="tab-pane-<?php echo cms_h($tabKey); ?>" role="tabpanel">
               <form method="post" action="<?php echo $CMS_BASE_URL; ?>/recordPreferencesv5.php">
                 <input type="hidden" name="active_tab" value="<?php echo cms_h($tabKey); ?>">
-                <div class="table-responsive">
-                  <table class="table table-striped table-hover cms-table align-middle">
+                <div class="table-responsive cms-record-grid-wrap">
+                  <table class="table table-striped table-hover cms-table align-middle cms-record-grid">
                     <thead>
                       <tr>
                         <th>ID</th>

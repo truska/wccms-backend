@@ -888,29 +888,8 @@ if (!$errors && $contentTable) {
             </div>
           </div>
 
-          <div class="table-responsive mt-4">
-            <style>
-              .cms-sort-link {
-                color: inherit;
-              }
-              .cms-sort-link:hover {
-                color: inherit;
-              }
-              .cms-sort-arrows {
-                display: inline-flex;
-                flex-direction: column;
-                align-items: center;
-                line-height: 0.72;
-                font-size: 10px;
-                color: #bcc2cc;
-                min-width: 10px;
-              }
-              .cms-sort-arrows .is-active {
-                color: #6a717d;
-                font-weight: 700;
-              }
-            </style>
-            <table class="table table-hover align-middle cms-table">
+          <div class="table-responsive mt-4 cms-record-grid-wrap">
+            <table class="table table-hover align-middle cms-table cms-record-grid">
               <?php
               $sortBaseQuery = $_GET;
               $sortBaseQuery['page'] = 1;
@@ -924,7 +903,7 @@ if (!$errors && $contentTable) {
                   $idDownActive = ($idIsCurrentSort && $sortDir === 'desc');
                   $idSortQuery = array_merge($sortBaseQuery, ['sort' => $idField, 'dir' => $idNextDir]);
                   ?>
-                  <th>
+                  <th class="cms-record-id">
                     <a class="cms-sort-link text-decoration-none d-flex align-items-center justify-content-between gap-2 w-100" href="?<?php echo cms_h(http_build_query($idSortQuery)); ?>">
                       <span>ID</span>
                       <span class="cms-sort-arrows" aria-hidden="true">
@@ -951,7 +930,7 @@ if (!$errors && $contentTable) {
                       </a>
                     </th>
                   <?php endforeach; ?>
-                  <th class="text-center">Action</th>
+                  <th class="text-center cms-record-actions">Action</th>
                 </tr>
                 <tr class="cms-table-filters">
                   <th></th>
@@ -1007,7 +986,7 @@ if (!$errors && $contentTable) {
                 <?php else: ?>
                   <?php foreach ($records as $row): ?>
                     <tr>
-                      <td><?php echo cms_h((string) $row['__record_id']); ?></td>
+                      <td class="cms-record-id"><?php echo cms_h((string) $row['__record_id']); ?></td>
                       <?php foreach ($columnMeta as $field => $meta): ?>
                         <?php
                         $display = (string) ($row[$meta['display']] ?? '');
@@ -1020,7 +999,7 @@ if (!$errors && $contentTable) {
                         <?php $rule = $ruleId && isset($viewRules[$ruleId]) ? $viewRules[$ruleId] : null; ?>
                         <td><?php echo cms_render_rule_value($display, $rule); ?></td>
                       <?php endforeach; ?>
-                      <td class="text-center">
+                      <td class="text-center cms-record-actions">
                         <?php if ($actions): ?>
                           <div class="cms-action-buttons">
                             <?php foreach ($actions as $action): ?>
