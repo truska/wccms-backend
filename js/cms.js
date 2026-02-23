@@ -74,7 +74,10 @@
   const galleryLists = document.querySelectorAll('[data-gallery]');
   galleryLists.forEach((list) => {
     let dragItem = null;
-    const orderInput = list.parentElement.querySelector('input[name="gallery_order"]');
+    const prev = list.previousElementSibling;
+    const orderInput = (prev && prev.matches('input[name="gallery_order"]'))
+      ? prev
+      : list.parentElement.querySelector('input[name="gallery_order"]');
 
     const updateOrder = () => {
       if (!orderInput) {

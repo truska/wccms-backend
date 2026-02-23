@@ -20,6 +20,9 @@ include __DIR__ . '/includes/header.php';
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">Stats</button>
       </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="footer-debug-tab" data-bs-toggle="tab" data-bs-target="#footer-debug" type="button" role="tab">Parameters</button>
+      </li>
     </ul>
 
     <div class="tab-content pt-4">
@@ -41,6 +44,18 @@ include __DIR__ . '/includes/header.php';
       <div class="tab-pane fade" id="stats" role="tabpanel" aria-labelledby="stats-tab">
         <div class="cms-card">
           <p class="mb-0">Stats will populate here once wired to the database.</p>
+        </div>
+      </div>
+      <div class="tab-pane fade" id="footer-debug" role="tabpanel" aria-labelledby="footer-debug-tab">
+        <div class="cms-card">
+          <?php
+            $footerDebugPath = dirname(__DIR__) . '/includes/footer-debug.php';
+            if (is_file($footerDebugPath)) {
+              include $footerDebugPath;
+            } else {
+              echo '<p class="mb-0 text-muted">footer-debug.php was not found at /includes/footer-debug.php.</p>';
+            }
+          ?>
         </div>
       </div>
     </div>

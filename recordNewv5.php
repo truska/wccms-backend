@@ -41,6 +41,14 @@ function cms_pick_column(array $columns, array $candidates): ?string {
   return null;
 }
 
+function cms_sort_column(PDO $pdo, string $table, array $candidates = ['sort', 'order', 'position']): ?string {
+  $cols = cms_table_columns($pdo, $table);
+  if (!$cols) {
+    return null;
+  }
+  return cms_pick_column($cols, $candidates);
+}
+
 /**
  * Validate an identifier for safe use in SQL identifiers.
  */
@@ -89,10 +97,16 @@ function cms_get_form_fields(PDO $pdo, int $formId): array {
   if (!cms_table_exists($pdo, 'cms_form_field')) {
     return [];
   }
-  $sql = "SELECT * FROM cms_form_field WHERE form = :form AND showonweb = 'Yes' AND archived = 0 ORDER BY tab ASC, sort ASC, id ASC";
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute([':form' => $formId]);
-  return $stmt->fetchAll(PDO::FETCH_ASSOC);
+  $sortField = cms_sort_column($pdo, 'cms_form_field', ['sort', 'order']);
+  $orderBySort = $sortField ? "`{$sortField}`" : 'id';
+  $sql = "SELECT * FROM cms_form_field WHERE form = :form AND showonweb = 'Yes' AND archived = 0 ORDER BY tab ASC, {$orderBySort} ASC, id ASC";
+  try {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':form' => $formId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+  } catch (PDOException $e) {
+    return [];
+  }
 }
 
 /**

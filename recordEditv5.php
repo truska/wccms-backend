@@ -41,6 +41,14 @@ function cms_pick_column(array $columns, array $candidates): ?string {
   return null;
 }
 
+function cms_sort_column(PDO $pdo, string $table, array $candidates = ['sort', 'order', 'position']): ?string {
+  $cols = cms_table_columns($pdo, $table);
+  if (!$cols) {
+    return null;
+  }
+  return cms_pick_column($cols, $candidates);
+}
+
 /**
  * Validate an identifier for safe use in SQL identifiers.
  */
@@ -89,10 +97,16 @@ function cms_get_form_fields(PDO $pdo, int $formId): array {
   if (!cms_table_exists($pdo, 'cms_form_field')) {
     return [];
   }
-  $sql = "SELECT * FROM cms_form_field WHERE form = :form AND showonweb = 'Yes' AND archived = 0 ORDER BY tab ASC, sort ASC, id ASC";
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute([':form' => $formId]);
-  return $stmt->fetchAll(PDO::FETCH_ASSOC);
+  $sortField = cms_sort_column($pdo, 'cms_form_field', ['sort', 'order']);
+  $orderBySort = $sortField ? "`{$sortField}`" : 'id';
+  $sql = "SELECT * FROM cms_form_field WHERE form = :form AND showonweb = 'Yes' AND archived = 0 ORDER BY tab ASC, {$orderBySort} ASC, id ASC";
+  try {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':form' => $formId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+  } catch (PDOException $e) {
+    return [];
+  }
 }
 
 /**
@@ -162,9 +176,13 @@ function cms_next_gallery_sort(PDO $pdo, int $formId, int $recordId): int {
   if (!cms_table_exists($pdo, 'gallery')) {
     return 0;
   }
-  $stmt = $pdo->prepare('SELECT MAX(sort) AS max_sort FROM gallery WHERE form_id = :form AND record_id = :record');
+  $sortField = cms_sort_column($pdo, 'gallery', ['sort', 'order']);
+  if (!$sortField) {
+    return 0;
+  }
+  $stmt = $pdo->prepare("SELECT MAX(`{$sortField}`) AS max_sort FROM gallery WHERE form_id = :form AND record_id = :record");
   $stmt->execute([':form' => $formId, ':record' => $recordId]);
-  $row = $stmt->fetch(PDO::FETCH_ASSOC);
+  $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : [];
   $maxSort = isset($row['max_sort']) ? (int) $row['max_sort'] : 0;
   return $maxSort + 1;
 }
@@ -173,7 +191,9 @@ function cms_fetch_gallery_items(PDO $pdo, int $formId, int $recordId): array {
   if (!cms_table_exists($pdo, 'gallery')) {
     return [];
   }
-  $stmt = $pdo->prepare('SELECT * FROM gallery WHERE form_id = :form AND record_id = :record AND archived = 0 ORDER BY sort ASC, id ASC');
+  $sortField = cms_sort_column($pdo, 'gallery', ['sort', 'order']);
+  $orderBySort = $sortField ? "`{$sortField}`" : 'id';
+  $stmt = $pdo->prepare("SELECT * FROM gallery WHERE form_id = :form AND record_id = :record AND archived = 0 ORDER BY {$orderBySort} ASC, id ASC");
   $stmt->execute([':form' => $formId, ':record' => $recordId]);
   return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
@@ -689,13 +709,20 @@ if ($postFormId !== $formId || $postRecordId !== $recordId) {
 
         if ($fieldTypeId === 23 && cms_table_exists($pdo, 'gallery')) {
           $sort = cms_next_gallery_sort($pdo, $formId, $recordId);
+          $gallerySortField = cms_sort_column($pdo, 'gallery', ['sort', 'order']);
           $folderName = $stored['mediatype'];
           if ($stored['folder'] !== '') {
             $folderName .= '/' . $stored['folder'];
           }
           $name = pathinfo($stored['filename'], PATHINFO_FILENAME);
-          $stmt = $pdo->prepare('INSERT INTO gallery (record_id, form_id, form_name, name, alttag, caption, date, layout, image, folder_name, slug, category, keyword, sort, showonweb, archived) VALUES (:record, :form, :form_name, :name, :alttag, :caption, :date, :layout, :image, :folder, :slug, :category, :keyword, :sort, :showonweb, 0)');
-          $stmt->execute([
+          $columns = 'record_id, form_id, form_name, name, alttag, caption, date, layout, image, folder_name, slug, category, keyword';
+          $values = ':record, :form, :form_name, :name, :alttag, :caption, :date, :layout, :image, :folder, :slug, :category, :keyword';
+          if ($gallerySortField) {
+            $columns .= ", `{$gallerySortField}`";
+            $values .= ', :sort';
+          }
+          $stmt = $pdo->prepare("INSERT INTO gallery ({$columns}, showonweb, archived) VALUES ({$values}, :showonweb, 0)");
+          $params = [
             ':record' => $recordId,
             ':form' => $formId,
             ':form_name' => (string) ($form['name'] ?? $form['title'] ?? ''),
@@ -709,9 +736,12 @@ if ($postFormId !== $formId || $postRecordId !== $recordId) {
             ':slug' => '',
             ':category' => '',
             ':keyword' => '',
-            ':sort' => $sort,
             ':showonweb' => 'Yes',
-          ]);
+          ];
+          if ($gallerySortField) {
+            $params[':sort'] = $sort;
+          }
+          $stmt->execute($params);
         }
       }
     }
@@ -747,12 +777,16 @@ if ($postFormId !== $formId || $postRecordId !== $recordId) {
 
       if (!empty($_POST['gallery_order'])) {
         $order = array_filter(array_map('intval', explode(',', (string) $_POST['gallery_order'])));
+        $gallerySortField = cms_sort_column($pdo, 'gallery', ['sort', 'order']);
+        if (!$gallerySortField) {
+          $order = [];
+        }
         $sortPos = 1;
         foreach ($order as $gid) {
           if (!in_array($gid, $galleryIds, true)) {
             continue;
           }
-          $stmt = $pdo->prepare('UPDATE gallery SET sort = :sort WHERE id = :id');
+          $stmt = $pdo->prepare("UPDATE gallery SET `{$gallerySortField}` = :sort WHERE id = :id");
           $stmt->execute([':sort' => $sortPos, ':id' => $gid]);
           $sortPos++;
         }
