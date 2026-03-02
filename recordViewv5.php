@@ -287,6 +287,11 @@ function cms_get_form_view_columns(PDO $pdo, array $form, string $contentTable):
  * Load action buttons configured for a form.
  */
 function cms_get_form_actions(PDO $pdo, array $form): array {
+  $formId = isset($form['id']) ? (int) $form['id'] : 0;
+  if ($formId <= 0) {
+    return [];
+  }
+
   if (!cms_table_exists($pdo, 'cms_form_actions') || !cms_table_exists($pdo, 'cms_actions')) {
     return [];
   }
@@ -331,16 +336,26 @@ function cms_get_form_actions(PDO $pdo, array $form): array {
   }
 
   $stmt = $pdo->prepare($sql);
-  $stmt->execute([':form_id' => $form['id'] ?? 0]);
+  $stmt->execute([':form_id' => $formId]);
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
   $actions = [];
 
   foreach ($rows as $row) {
+    $label = trim((string) ($labelField ? ($row[$labelField] ?? '') : ($row['name'] ?? '')));
+    $slug = trim((string) ($slugField ? ($row[$slugField] ?? '') : ($row['name'] ?? '')));
+    $url = trim((string) ($urlField ? ($row[$urlField] ?? '') : ''));
+    $icon = trim((string) ($iconField ? ($row[$iconField] ?? '') : ''));
+
+    // Ignore rows that cannot produce any actionable button.
+    if ($label === '' && $slug === '' && $url === '' && $icon === '') {
+      continue;
+    }
+
     $actions[] = [
-      'label' => $labelField ? ($row[$labelField] ?? '') : ($row['name'] ?? ''),
-      'slug' => $slugField ? ($row[$slugField] ?? '') : ($row['name'] ?? ''),
-      'icon' => $iconField ? ($row[$iconField] ?? '') : '',
-      'url' => $urlField ? ($row[$urlField] ?? '') : '',
+      'label' => $label,
+      'slug' => $slug,
+      'icon' => $icon,
+      'url' => $url,
       'tooltip' => $tooltipField ? ($row[$tooltipField] ?? '') : '',
       'confirm' => $confirmField ? ($row[$confirmField] ?? '') : '',
       'confirm_text' => $confirmTextField ? ($row[$confirmTextField] ?? '') : '',

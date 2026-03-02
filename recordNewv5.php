@@ -170,8 +170,26 @@ function cms_field_input_type(string $type): string {
   if (str_contains($type, 'date') && str_contains($type, 'time')) {
     return 'datetime-local';
   }
+  if (str_contains($type, 'month')) {
+    return 'month';
+  }
+  if (str_contains($type, 'week')) {
+    return 'week';
+  }
   if (str_contains($type, 'date')) {
     return 'date';
+  }
+  if (str_contains($type, 'range')) {
+    return 'range';
+  }
+  if (str_contains($type, 'search')) {
+    return 'search';
+  }
+  if (str_contains($type, 'tel') || str_contains($type, 'phone') || str_contains($type, 'telephone')) {
+    return 'tel';
+  }
+  if (str_contains($type, 'hidden')) {
+    return 'hidden';
   }
   if (str_contains($type, 'number') || str_contains($type, 'int') || str_contains($type, 'decimal')) {
     return 'number';
@@ -394,6 +412,13 @@ function cms_table_field_options(PDO $pdo, array $field, ?string $contentTable =
  * Unified select/radio option resolution with robust fallbacks.
  */
 function cms_field_choice_options(PDO $pdo, array $field, int $fieldTypeId, string $sourceSql, ?string $contentTable = null): array {
+  if ($fieldTypeId === 17) {
+    return [
+      ['value' => 'Yes', 'label' => 'Yes'],
+      ['value' => 'No', 'label' => 'No'],
+    ];
+  }
+
   $options = [];
 
   // Prefer explicit source SQL when configured.
@@ -582,6 +607,9 @@ if (!$errors && $_SERVER['REQUEST_METHOD'] === 'POST') {
       $typeRow = $fieldTypes[$fieldTypeId] ?? null;
       $typeName = $typeRow['type'] ?? '';
       $inputType = ($fieldTypeId === 16 || $fieldTypeId === 18) ? 'select' : cms_field_input_type($typeName);
+      if ($fieldTypeId === 17) {
+        $inputType = 'radio';
+      }
 
       $value = $_POST[$fieldName] ?? null;
       // Hash password fields when provided; otherwise fall back to an auto-generated password.
@@ -792,7 +820,7 @@ $formTitle = $form['title'] ?? 'Form';
                       $typeName = $typeRow['type'] ?? '';
                       if ($fieldTypeId === 2) {
                         $inputType = 'password';
-                      } elseif ($fieldTypeId === 3) {
+                      } elseif ($fieldTypeId === 3 || $fieldTypeId === 17) {
                         $inputType = 'radio';
                       } elseif ($fieldTypeId === 4) {
                         $inputType = 'checkbox';
@@ -800,6 +828,8 @@ $formTitle = $form['title'] ?? 'Form';
                         $inputType = 'color';
                       } elseif ($fieldTypeId === 6) {
                         $inputType = 'date';
+                      } elseif ($fieldTypeId === 7) {
+                        $inputType = 'email';
                       } elseif ($fieldTypeId === 28) {
                         $inputType = 'datetime-local';
                       } elseif ($fieldTypeId === 13) {
@@ -903,7 +933,7 @@ $formTitle = $form['title'] ?? 'Form';
                 $typeName = $typeRow['type'] ?? '';
                 if ($fieldTypeId === 2) {
                   $inputType = 'password';
-                } elseif ($fieldTypeId === 3) {
+                } elseif ($fieldTypeId === 3 || $fieldTypeId === 17) {
                   $inputType = 'radio';
                 } elseif ($fieldTypeId === 4) {
                   $inputType = 'checkbox';
@@ -911,6 +941,8 @@ $formTitle = $form['title'] ?? 'Form';
                   $inputType = 'color';
                 } elseif ($fieldTypeId === 6) {
                   $inputType = 'date';
+                } elseif ($fieldTypeId === 7) {
+                  $inputType = 'email';
                 } elseif ($fieldTypeId === 28) {
                   $inputType = 'datetime-local';
                 } elseif ($fieldTypeId === 13) {
