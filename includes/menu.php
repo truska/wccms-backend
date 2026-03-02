@@ -98,18 +98,14 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
   <div class="cms-sidebar-inner">
     <?php if (!$cmsMenuRows): ?>
       <div class="cms-menu-section">
-        <button class="cms-menu-title" type="button">
-          <i class="fa-solid fa-user-gear"></i>
-          <span>Admin</span>
-          <i class="fa-solid fa-chevron-down ms-auto"></i>
-        </button>
+        <div class="cms-menu-heading">Admin</div>
         <div class="cms-menu-sub">
-          <a href="<?php echo $CMS_BASE_URL; ?>/dashboard.php" class="cms-menu-link">CMS Home</a>
-          <a href="<?php echo $baseURL; ?>/index.php" class="cms-menu-link" target="_blank" rel="noopener">Site Home</a>
+          <a href="<?php echo $CMS_BASE_URL; ?>/dashboard.php" class="cms-menu-link cms-menu-link-root">CMS Home</a>
+          <a href="<?php echo $baseURL; ?>/index.php" class="cms-menu-link cms-menu-link-root" target="_blank" rel="noopener">Site Home</a>
         </div>
       </div>
     <?php else: ?>
-      <nav class="cms-menu">
+      <nav class="cms-menu" id="cmsMenuNav">
         <?php foreach ($menuSections as $sectionId => $section): ?>
           <?php
           $rows = $section['rows'];
@@ -176,16 +172,20 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
                   break;
                 }
               }
-              $expanded = $childActive ? 'true' : 'false';
+              $expanded = 'false';
               ?>
               <button class="cms-menu-item cms-menu-toggle <?php echo $childActive ? 'active' : ''; ?>" type="button" data-bs-toggle="collapse" data-bs-target="#cms-menu-<?php echo $sectionId; ?>" aria-expanded="<?php echo $expanded; ?>">
-                <?php if ($iconClass): ?>
-                  <i class="<?php echo cms_h($iconClass); ?>"></i>
-                <?php endif; ?>
-                <span><?php echo cms_h($title); ?></span>
-                <i class="fa-solid fa-chevron-down ms-auto"></i>
+                <span class="cms-menu-main">
+                  <?php if ($iconClass): ?>
+                    <i class="<?php echo cms_h($iconClass); ?> cms-menu-icon" aria-hidden="true"></i>
+                  <?php endif; ?>
+                  <span class="cms-menu-label"><?php echo cms_h($title); ?></span>
+                </span>
+                <span class="cms-menu-caret" aria-hidden="true">
+                  <i class="fa-solid fa-chevron-down"></i>
+                </span>
               </button>
-              <div class="collapse cms-menu-sub <?php echo $childActive ? 'show' : ''; ?>" id="cms-menu-<?php echo $sectionId; ?>">
+              <div class="collapse cms-menu-sub" id="cms-menu-<?php echo $sectionId; ?>" data-bs-parent="#cmsMenuNav">
                 <?php foreach ($children as $item): ?>
                   <?php
                   $childTitle = $item['title'] ?? 'Link';
@@ -201,18 +201,18 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
                   }
                   $childIsActive = $childUrl ? cms_menu_is_active($childUrl, $cmsMenuPath, $cmsMenuQuery) : false;
                   ?>
-                  <a class="cms-menu-link <?php echo $childIsActive ? 'active' : ''; ?>" href="<?php echo cms_h($childUrl ?: '#'); ?>"<?php echo $childTarget ? ' target="' . cms_h($childTarget) . '"' : ''; ?>>
+                  <a class="cms-menu-link cms-menu-link-child <?php echo $childIsActive ? 'active' : ''; ?>" href="<?php echo cms_h($childUrl ?: '#'); ?>"<?php echo $childTarget ? ' target="' . cms_h($childTarget) . '"' : ''; ?>>
                     <?php echo cms_h($childTitle); ?>
                   </a>
                 <?php endforeach; ?>
               </div>
             </div>
           <?php else: ?>
-            <a class="cms-menu-item <?php echo $isActive ? 'active' : ''; ?>" href="<?php echo cms_h($url ?: '#'); ?>"<?php echo $target ? ' target="' . cms_h($target) . '"' : ''; ?>>
+            <a class="cms-menu-link cms-menu-link-root <?php echo $isActive ? 'active' : ''; ?>" href="<?php echo cms_h($url ?: '#'); ?>"<?php echo $target ? ' target="' . cms_h($target) . '"' : ''; ?>>
               <?php if ($iconClass): ?>
-                <i class="<?php echo cms_h($iconClass); ?>"></i>
+                <i class="<?php echo cms_h($iconClass); ?> cms-menu-icon" aria-hidden="true"></i>
               <?php endif; ?>
-              <span><?php echo cms_h($title); ?></span>
+              <span class="cms-menu-label"><?php echo cms_h($title); ?></span>
             </a>
           <?php endif; ?>
         <?php endforeach; ?>
