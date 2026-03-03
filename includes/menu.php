@@ -132,9 +132,11 @@ foreach ($cmsMenuRows as $row) {
 
 ksort($menuSections);
 
-$cmsVersion = trim((string) cms_pref('prefCSMVer', '1.0', 'cms'));
+$cmsVersion = trim((string) cms_pref('prefCMSVer', '', 'cms'));
+if ($cmsVersion === '') {
+  $cmsVersion = trim((string) cms_pref('prefCSMVer', '1.0', 'cms'));
+}
 $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', 'cms'));
-$cmsCompanyName = trim((string) cms_pref('prefCompanyName', 'wITeCanvas'));
 ?>
 <aside id="cmsSidebar" class="cms-sidebar">
   <div class="cms-sidebar-inner">
@@ -281,7 +283,7 @@ $cmsCompanyName = trim((string) cms_pref('prefCompanyName', 'wITeCanvas'));
       <img src="<?php echo $baseURL; ?>/filestore/images/logos/<?php echo cms_h($cmsSidebarLogo !== '' ? $cmsSidebarLogo : 'witecanvas-logo-s.png'); ?>" alt="wITeCanvas" class="cms-sidebar-logo">
       
       <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '5.0'); ?></div>
-      <div><?php echo cms_render_copyright_notice($cmsCompanyName); ?></div>
+      <div><?php echo cms_render_copyright_notice('wITeCanvas'); ?></div>
     </div>
   </div>
 </aside>
