@@ -70,6 +70,23 @@ function cms_menu_row_is_visible(array $row, int $userRole): bool {
   return (int) ($row['userrole'] ?? 1) <= $userRole;
 }
 
+if (!function_exists('cms_render_copyright_notice')) {
+  /**
+   * Build a standard copyright notice from site preferences.
+   */
+  function cms_render_copyright_notice(string $companyName): string {
+    $currentYear = date('Y');
+    $startYear = trim((string) cms_pref('prefCopyrightStartYear', ''));
+    $yearText = $currentYear;
+
+    if ($startYear !== '' && preg_match('/^\d{4}$/', $startYear) && $startYear !== $currentYear) {
+      $yearText = $startYear . ' &mdash; ' . $currentYear;
+    }
+
+    return '&copy; ' . $yearText . ' ' . cms_h($companyName) . '. All rights reserved.';
+  }
+}
+
 // Load menu rows so hierarchy-aware access can be applied in PHP.
 if (isset($CMS_USER['id']) && $DB_OK && $pdo instanceof PDO && cms_menu_table_exists($pdo, 'cms_menu')) {
   try {
@@ -117,6 +134,7 @@ ksort($menuSections);
 
 $cmsVersion = trim((string) cms_pref('prefCSMVer', '1.0', 'cms'));
 $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', 'cms'));
+$cmsCompanyName = trim((string) cms_pref('prefCompanyName', 'wITeCanvas'));
 ?>
 <aside id="cmsSidebar" class="cms-sidebar">
   <div class="cms-sidebar-inner">
@@ -143,15 +161,19 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
           });
 
           $parent = $section['parent'];
-          if (!$parent || !cms_menu_row_is_visible($parent, $cmsMenuUserRole)) {
+          if (!$parent) {
             continue;
           }
 
+          $parentVisible = cms_menu_row_is_visible($parent, $cmsMenuUserRole);
+
           $children = [];
-          foreach ($rows as $row) {
-            $sub = (int) ($row['subsection'] ?? 0);
-            if ($sub !== 0) {
-              $children[] = $row;
+          if ($parentVisible) {
+            foreach ($rows as $row) {
+              $sub = (int) ($row['subsection'] ?? 0);
+              if ($sub !== 0) {
+                $children[] = $row;
+              }
             }
           }
 
@@ -170,7 +192,18 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
           }
           $isActive = $url ? cms_menu_is_active($url, $cmsMenuPath, $cmsMenuQuery) : false;
           ?>
-          <?php if ($hasDropdown): ?>
+          <?php if (!$parentVisible): ?>
+            <div class="cms-menu-group">
+              <button class="cms-menu-item cms-menu-toggle is-disabled" type="button" disabled aria-disabled="true">
+                <span class="cms-menu-main">
+                  <?php if ($iconClass): ?>
+                    <i class="<?php echo cms_h($iconClass); ?> cms-menu-icon" aria-hidden="true"></i>
+                  <?php endif; ?>
+                  <span class="cms-menu-label"><?php echo cms_h($title); ?></span>
+                </span>
+              </button>
+            </div>
+          <?php elseif ($hasDropdown): ?>
             <div class="cms-menu-group">
               <?php
               $childActive = false;
@@ -241,14 +274,14 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
       <div>User: <?php echo cms_h($CMS_USER['display_name'] ?? 'Guest'); ?></div>
       <div>Username: <?php echo cms_h($CMS_USER['email'] ?? ''); ?></div>
       <div>Role: <?php echo cms_h((string) $cmsMenuUserRole); ?></div>
-      <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '1.0'); ?></div>
       <div>User IP: <?php echo cms_h($_SERVER['REMOTE_ADDR'] ?? ''); ?></div>
     </div>
 
     <div class="cms-sidebar-footer">
       <img src="<?php echo $baseURL; ?>/filestore/images/logos/<?php echo cms_h($cmsSidebarLogo !== '' ? $cmsSidebarLogo : 'witecanvas-logo-s.png'); ?>" alt="wITeCanvas" class="cms-sidebar-logo">
-      <div>© wITeCanvas 2020 - 2026</div>
-      <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '1.0'); ?></div>
+      
+      <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '5.0'); ?></div>
+      <div><?php echo cms_render_copyright_notice($cmsCompanyName); ?></div>
     </div>
   </div>
 </aside>

@@ -207,6 +207,13 @@ a.link-email:focus {
   cursor: pointer;
 }
 
+.cms-menu-item.is-disabled,
+.cms-menu-item:disabled {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+
 .cms-menu-main {
   display: inline-flex;
   align-items: center;
