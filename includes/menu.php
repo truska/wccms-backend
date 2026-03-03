@@ -56,7 +56,21 @@ function cms_menu_is_active(string $url, string $currentPath, array $currentQuer
   return true;
 }
 
-// Load menu rows the current user can access.
+/**
+ * Apply per-row visibility rules for the current CMS user.
+ */
+function cms_menu_row_is_visible(array $row, int $userRole): bool {
+  if ((string) ($row['showonweb'] ?? 'No') !== 'Yes') {
+    return false;
+  }
+  if ((int) ($row['archived'] ?? 0) !== 0) {
+    return false;
+  }
+
+  return (int) ($row['userrole'] ?? 1) <= $userRole;
+}
+
+// Load menu rows so hierarchy-aware access can be applied in PHP.
 if (isset($CMS_USER['id']) && $DB_OK && $pdo instanceof PDO && cms_menu_table_exists($pdo, 'cms_menu')) {
   try {
     $roleStmt = $pdo->prepare('SELECT userrole FROM cms_users WHERE id = :id LIMIT 1');
@@ -70,8 +84,8 @@ if (isset($CMS_USER['id']) && $DB_OK && $pdo instanceof PDO && cms_menu_table_ex
   }
 
   try {
-    $stmt = $pdo->prepare("SELECT * FROM cms_menu WHERE showonweb = 'Yes' AND archived = 0 AND userrole <= :role ORDER BY section ASC, subsection ASC, id ASC");
-    $stmt->execute([':role' => $cmsMenuUserRole]);
+    $stmt = $pdo->prepare('SELECT * FROM cms_menu ORDER BY section ASC, subsection ASC, id ASC');
+    $stmt->execute();
     $cmsMenuRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
   } catch (PDOException $e) {
     $cmsMenuRows = [];
@@ -84,9 +98,19 @@ $menuSections = [];
 foreach ($cmsMenuRows as $row) {
   $sectionId = (int) ($row['section'] ?? 0);
   if (!isset($menuSections[$sectionId])) {
-    $menuSections[$sectionId] = ['rows' => []];
+    $menuSections[$sectionId] = [
+      'parent' => null,
+      'visible_rows' => [],
+    ];
   }
-  $menuSections[$sectionId]['rows'][] = $row;
+
+  if ((int) ($row['subsection'] ?? 0) === 0 && $menuSections[$sectionId]['parent'] === null) {
+    $menuSections[$sectionId]['parent'] = $row;
+  }
+
+  if (cms_menu_row_is_visible($row, $cmsMenuUserRole)) {
+    $menuSections[$sectionId]['visible_rows'][] = $row;
+  }
 }
 
 ksort($menuSections);
@@ -108,7 +132,7 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
       <nav class="cms-menu" id="cmsMenuNav">
         <?php foreach ($menuSections as $sectionId => $section): ?>
           <?php
-          $rows = $section['rows'];
+          $rows = $section['visible_rows'];
           usort($rows, static function ($a, $b) {
             $sa = (int) ($a['subsection'] ?? 0);
             $sb = (int) ($b['subsection'] ?? 0);
@@ -118,24 +142,17 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
             return $sa <=> $sb;
           });
 
-          $parent = null;
+          $parent = $section['parent'];
+          if (!$parent || !cms_menu_row_is_visible($parent, $cmsMenuUserRole)) {
+            continue;
+          }
+
           $children = [];
           foreach ($rows as $row) {
             $sub = (int) ($row['subsection'] ?? 0);
-            if ($sub === 0 && !$parent) {
-              $parent = $row;
-            } else {
+            if ($sub !== 0) {
               $children[] = $row;
             }
-          }
-
-          if (!$parent && $rows) {
-            $parent = array_shift($rows);
-            $children = $rows;
-          }
-
-          if (!$parent) {
-            continue;
           }
 
           $hasDropdown = !empty($children);
