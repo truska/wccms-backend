@@ -118,6 +118,10 @@ a.link-email:focus {
   min-height: calc(100vh - 64px);
 }
 
+.cms-shell > * {
+  min-width: 0;
+}
+
 /* Sidebar */
 .cms-sidebar {
   background: var(--cms-sidebar);
@@ -352,6 +356,7 @@ a.link-email:focus {
 /* Main content area */
 .cms-content {
   padding: 2rem 2.5rem 3rem;
+  min-width: 0;
 }
 
 /* Tabs / cards / helpers */
@@ -468,11 +473,13 @@ a.link-email:focus {
 /* Contained/wrapping variant for dense record grids */
 .cms-record-grid-wrap {
   max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .cms-record-grid {
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .cms-record-grid th,
@@ -500,8 +507,8 @@ a.link-email:focus {
 
 .cms-record-grid th.cms-record-actions,
 .cms-record-grid td.cms-record-actions {
-  width: 1%;
-  min-width: 7rem;
+  width: auto;
+  min-width: 8.5rem;
   white-space: nowrap;
 }
 
@@ -529,17 +536,32 @@ a.link-email:focus {
 }
 
 .cms-action-buttons {
-  display: inline-flex;
+  display: flex;
   gap: 0.4rem;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.1rem;
 }
 
 .cms-action-button {
   background: var(--cms-action-bg, #f8f9fa);
   color: var(--cms-action-color, #1f2b3a);
   border-color: var(--cms-action-border, #e0e6ee);
+  min-width: 2rem;
+  min-height: 2rem;
+  max-width: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
 
 /* Sticky save button on record forms */
 .cms-save-button {

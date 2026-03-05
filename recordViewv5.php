@@ -1019,7 +1019,10 @@ if (!$errors && $contentTable) {
                           <div class="cms-action-buttons">
                             <?php foreach ($actions as $action): ?>
                               <?php
-                              $label = $action['label'] ?: $action['slug'];
+                              $label = trim((string) ($action['label'] ?? ''));
+                              if ($label === '') {
+                                $label = trim((string) ($action['slug'] ?? ''));
+                              }
                               $href = $action['url'] ? $action['url'] : '#';
                               $actionKey = cms_action_key((string) $action['url']);
                               if ($actionKey === '') {
@@ -1093,7 +1096,10 @@ if (!$errors && $contentTable) {
                                   $iconClass = $iconRaw;
                                 }
                               }
-                              $hasIconClass = $iconClass !== '' && preg_match('/[a-zA-Z]/', $iconClass);
+                              // Only hide text when the icon class looks like a real icon class.
+                              // This avoids unreadable "thin bar" buttons when DB icon values are invalid.
+                              $hasIconClass = $iconClass !== ''
+                                && preg_match('/(^|\\s)(fa([a-z-]*)?|icon-[A-Za-z0-9_-]+|bi)(\\s|$)|fa-[A-Za-z0-9-]+/', $iconClass);
                               if (!empty($action['bg']) && (str_contains($action['bg'], ',') || str_contains($action['bg'], '|') || (str_contains($action['bg'], '#') && !str_starts_with($action['bg'], '#')))) {
                                 $bgRaw = (string) $action['bg'];
                                 if (str_contains($bgRaw, ',') || str_contains($bgRaw, '|')) {
@@ -1126,6 +1132,15 @@ if (!$errors && $contentTable) {
                                 $tooltipText = $isVisible ? $hideText : $showText;
                                 if ($tooltipText === '') {
                                   $tooltipText = $label;
+                                }
+                              }
+                              if ($label === '') {
+                                if ($tooltipText !== '') {
+                                  $label = $tooltipText;
+                                } elseif ($actionKey !== '') {
+                                  $label = ucwords(str_replace('_', ' ', $actionKey));
+                                } else {
+                                  $label = 'Action';
                                 }
                               }
                               $tooltipAttr = $tooltipText !== '' ? ' data-bs-toggle="tooltip" title="' . cms_h($tooltipText) . '"' : '';
