@@ -709,7 +709,7 @@ if (!$errors && $contentTable) {
   }
 
   // Search/sort/paging inputs (with defaults).
-  $globalSearch = trim((string) ($_GET['q'] ?? ''));
+  $globalSearch = (string) ($_GET['q'] ?? '');
   $sortColumn = (string) ($_GET['sort'] ?? $idField);
   $sortDir = strtolower((string) ($_GET['dir'] ?? 'asc'));
   if (!in_array($sortDir, ['asc', 'desc'], true)) {
@@ -868,6 +868,7 @@ if (!$errors && $contentTable) {
     <?php else: ?>
       <div class="cms-card">
         <form method="get" class="cms-table-controls">
+          <input type="hidden" name="_active" value="<?php echo cms_h((string) ($_GET['_active'] ?? '')); ?>">
           <?php if (!empty($_GET['frm'])): ?>
             <input type="hidden" name="frm" value="<?php echo cms_h((string) $_GET['frm']); ?>">
           <?php elseif (!empty($_GET['form_id'])): ?>

@@ -1,15 +1,13 @@
 (() => {
   // CMS UI helpers: sidebar toggle, Bootstrap tooltips, and menu accordion behavior.
   const burger = document.querySelector('.cms-burger');
-  if (!burger) {
-    return;
+  if (burger) {
+    burger.addEventListener('click', () => {
+      document.body.classList.toggle('cms-collapsed');
+      const expanded = !document.body.classList.contains('cms-collapsed');
+      burger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    });
   }
-
-  burger.addEventListener('click', () => {
-    document.body.classList.toggle('cms-collapsed');
-    const expanded = !document.body.classList.contains('cms-collapsed');
-    burger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  });
 
   // Enable Bootstrap tooltips when available.
   const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -261,6 +259,65 @@
     const globalSearchInput = form.querySelector('input[name="q"]');
     const filterTextInputs = form.querySelectorAll('tr.cms-table-filters input[type="text"]');
     const filterSelects = form.querySelectorAll('tr.cms-table-filters select');
+    const activeInputHidden = form.querySelector('input[name="_active"]');
+    const focusStorageKey = `cms_table_focus_${location.pathname}_${form.getAttribute('id') || form.getAttribute('name') || 'default'}`;
+
+    const saveFocusState = () => {
+      const active = document.activeElement;
+      const name = active && form.contains(active) ? active.getAttribute('name') : null;
+      if (!name) {
+        return;
+      }
+      if (activeInputHidden) {
+        activeInputHidden.value = name;
+      }
+      const state = { name };
+      if (typeof active.selectionStart === 'number' && typeof active.selectionEnd === 'number') {
+        state.selectionStart = active.selectionStart;
+        state.selectionEnd = active.selectionEnd;
+      }
+      sessionStorage.setItem(focusStorageKey, JSON.stringify(state));
+    };
+
+    const restoreFocusState = () => {
+      const stored = sessionStorage.getItem(focusStorageKey);
+      let data = null;
+      if (stored) {
+        sessionStorage.removeItem(focusStorageKey);
+        try {
+          data = JSON.parse(stored);
+        } catch (error) {
+          data = null;
+        }
+      }
+      if (!data || !data.name) {
+        const fallbackName = activeInputHidden && activeInputHidden.value ? activeInputHidden.value : null;
+        if (!fallbackName) {
+          return false;
+        }
+        data = { name: fallbackName };
+      }
+      const named = form.elements.namedItem(data.name);
+      const target = (named && typeof named.length === 'number' && named.length > 0) ? named[0] : named;
+      if (!target || typeof target.focus !== 'function') {
+        return false;
+      }
+      window.setTimeout(() => {
+        target.focus({ preventScroll: true });
+        if (typeof target.setSelectionRange === 'function' && typeof target.selectionStart === 'number') {
+          const start = typeof data.selectionStart === 'number' ? data.selectionStart : target.value.length;
+          const end = typeof data.selectionEnd === 'number' ? data.selectionEnd : start;
+          target.setSelectionRange(start, end);
+        }
+      }, 0);
+      return true;
+    };
+
+    restoreFocusState();
+
+    const trackActiveField = () => saveFocusState();
+    form.addEventListener('focusin', trackActiveField);
+    form.addEventListener('submit', trackActiveField, true);
 
     const submitNow = (resetPage = false) => {
       if (timerId) {
@@ -270,6 +327,7 @@
       if (resetPage && pageInput) {
         pageInput.value = '1';
       }
+      saveFocusState();
       form.requestSubmit();
     };
 
@@ -281,22 +339,24 @@
     };
 
     if (globalSearchInput) {
-      globalSearchInput.addEventListener('input', () => submitDebounced(true, 300));
-      globalSearchInput.addEventListener('change', () => submitNow(true));
+      const syncAndSubmit = () => { trackActiveField(); submitDebounced(true, 300); };
+      globalSearchInput.addEventListener('input', syncAndSubmit);
+      globalSearchInput.addEventListener('change', () => { trackActiveField(); submitNow(true); });
     }
 
     filterTextInputs.forEach((input) => {
-      input.addEventListener('input', () => submitDebounced(true, 250));
-      input.addEventListener('change', () => submitNow(true));
+      const syncAndSubmit = () => { trackActiveField(); submitDebounced(true, 250); };
+      input.addEventListener('input', syncAndSubmit);
+      input.addEventListener('change', () => { trackActiveField(); submitNow(true); });
     });
 
     filterSelects.forEach((select) => {
-      select.addEventListener('change', () => submitNow(true));
+      select.addEventListener('change', () => { trackActiveField(); submitNow(true); });
     });
 
     const sortSelects = form.querySelectorAll('select[name="sort"], select[name="dir"]');
     sortSelects.forEach((select) => {
-      select.addEventListener('change', () => submitNow(false));
+      select.addEventListener('change', () => { trackActiveField(); submitNow(false); });
     });
   });
 })();
