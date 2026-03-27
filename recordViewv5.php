@@ -668,6 +668,7 @@ $globalSearch = '';
 $columnMeta = [];
 $showArchived = false;
 $showOnWebField = null;
+$formWhereClause = '';
 
 if (!$errors && $contentTable) {
   // Build column metadata and SQL query parts.
@@ -681,6 +682,10 @@ if (!$errors && $contentTable) {
   $archivedField = cms_pick_column($contentCols, ['archived']);
   $formColumns = cms_table_columns($pdo, 'cms_form');
   $showArchivedField = cms_pick_column($formColumns, ['showarchived', 'show_archived', 'show_archived_records']);
+  $whereClauseField = cms_pick_column($formColumns, ['where1']);
+  if ($whereClauseField && !empty($form[$whereClauseField])) {
+    $formWhereClause = trim((string) $form[$whereClauseField]);
+  }
   if ($showArchivedField && isset($form[$showArchivedField])) {
     $showArchived = cms_is_yes($form[$showArchivedField]);
   }
@@ -800,6 +805,11 @@ if (!$errors && $contentTable) {
 
   if ($archivedField && !$showArchived) {
     $where[] = "c.`{$archivedField}` = 0";
+  }
+
+  if ($formWhereClause !== '') {
+    // Apply custom form-level WHERE snippet if provided.
+    $where[] = '(' . $formWhereClause . ')';
   }
 
   // Global search across visible columns.
