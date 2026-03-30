@@ -1203,4 +1203,88 @@ if (!$errors && $contentTable) {
     <?php endif; ?>
   </main>
 </div>
+<?php if (!$errors && $contentTable): ?>
+  <script>
+    // Persist last-used table controls for this form within the current browser session.
+    (() => {
+      const safeSessionStorage = (() => {
+        try {
+          const testKey = '__cms_state_test';
+          sessionStorage.setItem(testKey, '1');
+          sessionStorage.removeItem(testKey);
+          return true;
+        } catch (err) {
+          return false;
+        }
+      })();
+      if (!safeSessionStorage) {
+        return;
+      }
+
+      const formId = <?php echo json_encode((string) ($form['id'] ?? '')); ?>;
+      const tableName = <?php echo json_encode((string) $contentTable); ?>;
+      const formKeyRaw = <?php echo json_encode((string) $formKey); ?>;
+      const storageKey = `cms_record_view_state_${formId || tableName || 'default'}`;
+      const allowedKeys = new Set(['q', 'sort', 'dir', 'page', 'frm', 'form', 'form_id', '_active']);
+      const blockedKeys = new Set(['act', 'show', 'id', 'action']);
+      const filterPrefix = 'f[';
+
+      const ensureFormParam = (params) => {
+        if (params.has('frm') || params.has('form') || params.has('form_id')) {
+          return;
+        }
+        if (formKeyRaw !== '') {
+          params.set('frm', formKeyRaw);
+        }
+      };
+
+      const sanitizeParams = (source) => {
+        const clean = new URLSearchParams();
+        source.forEach((value, key) => {
+          if (blockedKeys.has(key)) {
+            return;
+          }
+          if (allowedKeys.has(key) || key.startsWith(filterPrefix)) {
+            if (value !== '') {
+              clean.append(key, value);
+            }
+          }
+        });
+        ensureFormParam(clean);
+        return clean;
+      };
+
+      const hasMeaningfulState = (params) => {
+        let meaningful = false;
+        params.forEach((value, key) => {
+          if (!value) {
+            return;
+          }
+          if (key === 'frm' || key === 'form' || key === 'form_id' || key === '_active') {
+            return;
+          }
+          meaningful = true;
+        });
+        return meaningful;
+      };
+
+      const currentParams = new URLSearchParams(window.location.search);
+      const currentState = sanitizeParams(currentParams);
+      const storedRaw = sessionStorage.getItem(storageKey);
+      const storedState = storedRaw ? sanitizeParams(new URLSearchParams(storedRaw)) : null;
+
+      if (storedState && storedState.toString() !== currentState.toString() && !hasMeaningfulState(currentState)) {
+        const redirectParams = new URLSearchParams(storedState.toString());
+        ensureFormParam(redirectParams);
+        const target = `${location.pathname}?${redirectParams.toString()}`;
+        if (target !== location.href) {
+          window.location.replace(target);
+          return;
+        }
+      }
+
+      sessionStorage.setItem(storageKey, currentState.toString());
+    })();
+  </script>
+<?php endif; ?>
 <?php include __DIR__ . '/includes/footer-code.php'; ?>
