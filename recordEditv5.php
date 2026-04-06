@@ -216,10 +216,16 @@ function cms_media_variant_exists(string $mediatype, string $folder, string $fil
 }
 
 function cms_gallery_thumb_url(array $item): string {
-  $folderName = (string) ($item['folder_name'] ?? '');
-  $parts = array_values(array_filter(explode('/', trim($folderName, '/'))));
-  $mediatype = $parts[0] ?? 'images';
-  $folder = implode('/', array_slice($parts, 1));
+  $folderName = trim((string) ($item['folder_name'] ?? ''), '/');
+  $parts = $folderName === '' ? [] : array_values(array_filter(explode('/', $folderName)));
+  $knownMedia = ['images', 'videos', 'audio', 'files'];
+  $mediatype = ($parts && in_array($parts[0], $knownMedia, true)) ? array_shift($parts) : 'images';
+  // Strip any trailing size segment accidentally stored in folder_name (e.g., "content/master").
+  $sizeSegments = ['xs', 'sm', 'md', 'lg', 'master', 'original'];
+  if ($parts && in_array(end($parts), $sizeSegments, true)) {
+    array_pop($parts);
+  }
+  $folder = implode('/', $parts);
   $filename = (string) ($item['image'] ?? '');
   $size = cms_media_variant_exists($mediatype, $folder, $filename, 'xs') ? 'xs' : 'master';
   return cms_media_url($mediatype, $folder, $filename, $size, true);
