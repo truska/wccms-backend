@@ -57,6 +57,32 @@ function cms_menu_is_active(string $url, string $currentPath, array $currentQuer
 }
 
 /**
+ * Build a usable menu URL from a cms_menu row.
+ */
+function cms_menu_build_url(array $row, string $cmsBaseUrl): string {
+  $url = trim((string) ($row['url'] ?? ''));
+  $formId = (int) ($row['form'] ?? 0);
+  $var1 = trim((string) ($row['var1'] ?? ''));
+
+  if ($url === '' && $formId > 0) {
+    $url = $cmsBaseUrl . '/recordViewv5.php';
+  }
+
+  $path = parse_url($url, PHP_URL_PATH) ?: '';
+  $file = basename($path);
+  $usesForm = in_array($file, ['recordViewv5.php', 'recordNewv5.php', 'recordEditv5.php', 'recordPreferencesv5.php', 'recordReportv4.php', 'recordBulkUpdatev1.php'], true);
+  if ($url !== '' && $formId > 0 && $usesForm && !preg_match('/(?:\\?|&)frm=/', $url)) {
+    $url .= (str_contains($url, '?') ? '&' : '?') . 'frm=' . urlencode((string) $formId);
+  }
+
+  if ($url !== '' && $var1 !== '') {
+    $url .= (str_contains($url, '?') ? '&' : '?') . ltrim($var1, '?&');
+  }
+
+  return $url;
+}
+
+/**
  * Apply per-row visibility rules for the current CMS user.
  */
 function cms_menu_row_is_visible(array $row, int $userRole): bool {
@@ -182,16 +208,8 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
           $hasDropdown = !empty($children);
           $iconClass = cms_icon_class($pdo, $parent['icon'] ?? null);
           $title = $parent['title'] ?? 'Menu';
-          $formId = $parent['form'] ?? null;
-          $url = $parent['url'] ?? '';
-          $var1 = $parent['var1'] ?? '';
+          $url = cms_menu_build_url($parent, $CMS_BASE_URL);
           $target = $parent['target'] ?? '';
-          if (!$url && $formId) {
-            $url = $CMS_BASE_URL . '/recordViewv5.php?frm=' . urlencode((string) $formId);
-          }
-          if ($url && $var1) {
-            $url .= (str_contains($url, '?') ? '&' : '?') . $var1;
-          }
           $isActive = $url ? cms_menu_is_active($url, $cmsMenuPath, $cmsMenuQuery) : false;
           ?>
           <?php if (!$parentVisible): ?>
@@ -210,15 +228,7 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
               <?php
               $childActive = false;
               foreach ($children as $item) {
-                $childUrl = $item['url'] ?? '';
-                $childForm = $item['form'] ?? null;
-                $childVar = $item['var1'] ?? '';
-                if (!$childUrl && $childForm) {
-                  $childUrl = $CMS_BASE_URL . '/recordViewv5.php?frm=' . urlencode((string) $childForm);
-                }
-                if ($childUrl && $childVar) {
-                  $childUrl .= (str_contains($childUrl, '?') ? '&' : '?') . $childVar;
-                }
+                $childUrl = cms_menu_build_url($item, $CMS_BASE_URL);
                 if ($childUrl && cms_menu_is_active($childUrl, $cmsMenuPath, $cmsMenuQuery)) {
                   $childActive = true;
                   break;
@@ -241,16 +251,8 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
                 <?php foreach ($children as $item): ?>
                   <?php
                   $childTitle = $item['title'] ?? 'Link';
-                  $childUrl = $item['url'] ?? '';
-                  $childForm = $item['form'] ?? null;
-                  $childVar = $item['var1'] ?? '';
+                  $childUrl = cms_menu_build_url($item, $CMS_BASE_URL);
                   $childTarget = $item['target'] ?? '';
-                  if (!$childUrl && $childForm) {
-                    $childUrl = $CMS_BASE_URL . '/recordViewv5.php?frm=' . urlencode((string) $childForm);
-                  }
-                  if ($childUrl && $childVar) {
-                    $childUrl .= (str_contains($childUrl, '?') ? '&' : '?') . $childVar;
-                  }
                   $childIsActive = $childUrl ? cms_menu_is_active($childUrl, $cmsMenuPath, $cmsMenuQuery) : false;
                   ?>
                   <a class="cms-menu-link cms-menu-link-child <?php echo $childIsActive ? 'active' : ''; ?>" href="<?php echo cms_h($childUrl ?: '#'); ?>"<?php echo $childTarget ? ' target="' . cms_h($childTarget) . '"' : ''; ?>>

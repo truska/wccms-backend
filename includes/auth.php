@@ -55,9 +55,29 @@ function cms_login(string $identifier, string $password, string &$error = null):
     return false;
   }
 
-  if (!password_verify($password, $user['password'])) {
+  $passwordHash = (string) $user['password'];
+  $passwordOk = password_verify($password, $passwordHash);
+  $needsRehash = $passwordOk && password_needs_rehash($passwordHash, PASSWORD_DEFAULT);
+
+  // Temporary bridge for legacy CMS passwords copied from cms_adminlogin.
+  // Old sites stored MD5 hashes; once a user logs in, upgrade the hash in place.
+  if (!$passwordOk && preg_match('/^[a-f0-9]{32}$/i', $passwordHash) && hash_equals(strtolower($passwordHash), md5($password))) {
+    $passwordOk = true;
+    $needsRehash = true;
+  }
+
+  if (!$passwordOk) {
     $error = 'Invalid login.';
     return false;
+  }
+
+  if ($needsRehash) {
+    $newHash = password_hash($password, PASSWORD_DEFAULT);
+    $updateStmt = $pdo->prepare('UPDATE cms_users SET password = :password WHERE id = :id');
+    $updateStmt->execute([
+      ':password' => $newHash,
+      ':id' => $user['id'],
+    ]);
   }
 
   // Prefer the explicit display name; fall back to first/last or username.
