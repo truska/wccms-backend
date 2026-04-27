@@ -60,12 +60,84 @@ function cms_icons_build_fa_class(?string $family, ?string $style, ?string $code
   return implode(' ', array_unique($classes));
 }
 
-function cms_icon_class(PDO $pdo, $iconId): ?string {
-  static $cache = [];
+function cms_icons_normalize_fa_class_token(string $token): string {
+  $token = strtolower(cms_icons_normalize_fa_token($token));
+  if ($token === '') {
+    return '';
+  }
 
-  if (!cms_icons_table_exists($pdo, 'cms_icons')) {
+  $legacyMap = [
+    'fa' => 'fa-solid',
+    'fas' => 'fa-solid',
+    'far' => 'fa-regular',
+    'fab' => 'fa-brands',
+    'fal' => 'fa-light',
+    'fat' => 'fa-thin',
+    'fad' => 'fa-duotone',
+  ];
+
+  if (isset($legacyMap[$token])) {
+    return $legacyMap[$token];
+  }
+
+  $styleMap = [
+    'solid' => 'fa-solid',
+    'regular' => 'fa-regular',
+    'brands' => 'fa-brands',
+    'brand' => 'fa-brands',
+    'light' => 'fa-light',
+    'thin' => 'fa-thin',
+    'duotone' => 'fa-duotone',
+  ];
+
+  if (isset($styleMap[$token])) {
+    return $styleMap[$token];
+  }
+
+  return str_starts_with($token, 'fa-') ? $token : 'fa-' . $token;
+}
+
+function cms_icons_class_from_spec(?string $iconSpec): ?string {
+  $iconSpec = trim((string) $iconSpec);
+  if ($iconSpec === '') {
     return null;
   }
+
+  $parts = preg_split('/[\s,|]+/', $iconSpec);
+  if (!is_array($parts) || !$parts) {
+    return null;
+  }
+
+  $classes = [];
+  foreach ($parts as $part) {
+    $class = cms_icons_normalize_fa_class_token((string) $part);
+    if ($class !== '') {
+      $classes[] = $class;
+    }
+  }
+
+  if (!$classes) {
+    return null;
+  }
+
+  $stylePrefixes = ['fa-solid', 'fa-regular', 'fa-brands', 'fa-light', 'fa-thin', 'fa-duotone'];
+  $hasStyle = false;
+  foreach ($classes as $class) {
+    if (in_array($class, $stylePrefixes, true)) {
+      $hasStyle = true;
+      break;
+    }
+  }
+
+  if (!$hasStyle) {
+    array_unshift($classes, 'fa-solid');
+  }
+
+  return implode(' ', array_values(array_unique($classes)));
+}
+
+function cms_icon_class(PDO $pdo, $iconId): ?string {
+  static $cache = [];
 
   $iconId = is_string($iconId) ? trim($iconId) : $iconId;
   if ($iconId === null || $iconId === '') {
@@ -74,10 +146,16 @@ function cms_icon_class(PDO $pdo, $iconId): ?string {
 
   if (is_string($iconId) && str_contains($iconId, ',')) {
     $parts = array_filter(array_map('trim', explode(',', $iconId)));
-    $iconId = $parts[0] ?? '';
+    if ($parts && is_numeric($parts[0])) {
+      $iconId = $parts[0];
+    }
   }
 
   if (!is_numeric($iconId)) {
+    return cms_icons_class_from_spec(is_scalar($iconId) ? (string) $iconId : '');
+  }
+
+  if (!cms_icons_table_exists($pdo, 'cms_icons')) {
     return null;
   }
 
@@ -90,8 +168,10 @@ function cms_icon_class(PDO $pdo, $iconId): ?string {
   $familyField = cms_icons_pick_column($cols, ['iconfamilyv7']);
   $styleField = cms_icons_pick_column($cols, ['iconstylev7', 'iocnstylev7']);
   $codeField = cms_icons_pick_column($cols, ['iconcodev7']);
+  $codeV6Field = cms_icons_pick_column($cols, ['codev6']);
+  $legacyCodeField = cms_icons_pick_column($cols, ['code']);
 
-  if (!$codeField) {
+  if (!$codeField && !$codeV6Field && !$legacyCodeField) {
     $cache[$iconId] = null;
     return null;
   }
@@ -109,7 +189,17 @@ function cms_icon_class(PDO $pdo, $iconId): ?string {
 
   $family = $prefFamily ?: ($familyField ? ($row[$familyField] ?? '') : '');
   $style = $prefStyle ?: ($styleField ? ($row[$styleField] ?? '') : '');
-  $code = $row[$codeField] ?? '';
+  $code = $codeField ? ($row[$codeField] ?? '') : '';
+
+  if (trim((string) $code) === '' && $codeV6Field) {
+    $cache[$iconId] = cms_icons_class_from_spec((string) ($row[$codeV6Field] ?? ''));
+    return $cache[$iconId];
+  }
+
+  if (trim((string) $code) === '' && $legacyCodeField) {
+    $cache[$iconId] = cms_icons_class_from_spec((string) ($row[$legacyCodeField] ?? ''));
+    return $cache[$iconId];
+  }
 
   $cache[$iconId] = cms_icons_build_fa_class($family, $style, $code);
   return $cache[$iconId];

@@ -44,7 +44,8 @@ function cms_frontend_is_allowed_site_root(string $siteRoot): bool {
     return false;
   }
 
-  if (!str_starts_with($realRoot, '/var/www/')) {
+  // Require absolute local filesystem path.
+  if (!str_starts_with($realRoot, '/')) {
     return false;
   }
 
@@ -57,9 +58,17 @@ function cms_frontend_is_allowed_site_root(string $siteRoot): bool {
     return false;
   }
 
+  // Deploy tooling assumes CMS lives under web/wccms.
+  if (!is_dir($webPath . '/wccms')) {
+    return false;
+  }
+
+  // Keep allow-list broad enough for different hosting layouts.
   $isClientStyle = (bool) preg_match('#^/var/www/clients/[^/]+/[^/]+$#', $realRoot);
   $isSiteStyle = (bool) preg_match('#^/var/www/[^/]+$#', $realRoot);
-  return $isClientStyle || $isSiteStyle;
+  $isHomeStyle = (bool) preg_match('#^/home/[^/]+/[^/]+$#', $realRoot);
+  $isSrvStyle = (bool) preg_match('#^/srv/[^/]+/[^/]+$#', $realRoot);
+  return $isClientStyle || $isSiteStyle || $isHomeStyle || $isSrvStyle;
 }
 
 /**

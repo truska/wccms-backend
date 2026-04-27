@@ -41,6 +41,14 @@ function cms_pick_column(array $columns, array $candidates): ?string {
   return null;
 }
 
+function cms_sort_column(PDO $pdo, string $table, array $candidates = ['sort', 'order', 'position']): ?string {
+  $cols = cms_table_columns($pdo, $table);
+  if (!$cols) {
+    return null;
+  }
+  return cms_pick_column($cols, $candidates);
+}
+
 /**
  * Validate an identifier for safe use in SQL identifiers.
  */
@@ -89,10 +97,16 @@ function cms_get_form_fields(PDO $pdo, int $formId): array {
   if (!cms_table_exists($pdo, 'cms_form_field')) {
     return [];
   }
-  $sql = "SELECT * FROM cms_form_field WHERE form = :form AND showonweb = 'Yes' AND archived = 0 ORDER BY tab ASC, sort ASC, id ASC";
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute([':form' => $formId]);
-  return $stmt->fetchAll(PDO::FETCH_ASSOC);
+  $sortField = cms_sort_column($pdo, 'cms_form_field', ['sort', 'order']);
+  $orderBySort = $sortField ? "`{$sortField}`" : 'id';
+  $sql = "SELECT * FROM cms_form_field WHERE form = :form AND showonweb = 'Yes' AND archived = 0 ORDER BY tab ASC, {$orderBySort} ASC, id ASC";
+  try {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':form' => $formId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+  } catch (PDOException $e) {
+    return [];
+  }
 }
 
 /**
@@ -156,8 +170,26 @@ function cms_field_input_type(string $type): string {
   if (str_contains($type, 'date') && str_contains($type, 'time')) {
     return 'datetime-local';
   }
+  if (str_contains($type, 'month')) {
+    return 'month';
+  }
+  if (str_contains($type, 'week')) {
+    return 'week';
+  }
   if (str_contains($type, 'date')) {
     return 'date';
+  }
+  if (str_contains($type, 'range')) {
+    return 'range';
+  }
+  if (str_contains($type, 'search')) {
+    return 'search';
+  }
+  if (str_contains($type, 'tel') || str_contains($type, 'phone') || str_contains($type, 'telephone')) {
+    return 'tel';
+  }
+  if (str_contains($type, 'hidden')) {
+    return 'hidden';
   }
   if (str_contains($type, 'number') || str_contains($type, 'int') || str_contains($type, 'decimal')) {
     return 'number';
@@ -380,6 +412,13 @@ function cms_table_field_options(PDO $pdo, array $field, ?string $contentTable =
  * Unified select/radio option resolution with robust fallbacks.
  */
 function cms_field_choice_options(PDO $pdo, array $field, int $fieldTypeId, string $sourceSql, ?string $contentTable = null): array {
+  if ($fieldTypeId === 17) {
+    return [
+      ['value' => 'Yes', 'label' => 'Yes'],
+      ['value' => 'No', 'label' => 'No'],
+    ];
+  }
+
   $options = [];
 
   // Prefer explicit source SQL when configured.
@@ -568,6 +607,9 @@ if (!$errors && $_SERVER['REQUEST_METHOD'] === 'POST') {
       $typeRow = $fieldTypes[$fieldTypeId] ?? null;
       $typeName = $typeRow['type'] ?? '';
       $inputType = ($fieldTypeId === 16 || $fieldTypeId === 18) ? 'select' : cms_field_input_type($typeName);
+      if ($fieldTypeId === 17) {
+        $inputType = 'radio';
+      }
 
       $value = $_POST[$fieldName] ?? null;
       // Hash password fields when provided; otherwise fall back to an auto-generated password.
@@ -778,7 +820,7 @@ $formTitle = $form['title'] ?? 'Form';
                       $typeName = $typeRow['type'] ?? '';
                       if ($fieldTypeId === 2) {
                         $inputType = 'password';
-                      } elseif ($fieldTypeId === 3) {
+                      } elseif ($fieldTypeId === 3 || $fieldTypeId === 17) {
                         $inputType = 'radio';
                       } elseif ($fieldTypeId === 4) {
                         $inputType = 'checkbox';
@@ -786,6 +828,8 @@ $formTitle = $form['title'] ?? 'Form';
                         $inputType = 'color';
                       } elseif ($fieldTypeId === 6) {
                         $inputType = 'date';
+                      } elseif ($fieldTypeId === 7) {
+                        $inputType = 'email';
                       } elseif ($fieldTypeId === 28) {
                         $inputType = 'datetime-local';
                       } elseif ($fieldTypeId === 13) {
@@ -889,7 +933,7 @@ $formTitle = $form['title'] ?? 'Form';
                 $typeName = $typeRow['type'] ?? '';
                 if ($fieldTypeId === 2) {
                   $inputType = 'password';
-                } elseif ($fieldTypeId === 3) {
+                } elseif ($fieldTypeId === 3 || $fieldTypeId === 17) {
                   $inputType = 'radio';
                 } elseif ($fieldTypeId === 4) {
                   $inputType = 'checkbox';
@@ -897,6 +941,8 @@ $formTitle = $form['title'] ?? 'Form';
                   $inputType = 'color';
                 } elseif ($fieldTypeId === 6) {
                   $inputType = 'date';
+                } elseif ($fieldTypeId === 7) {
+                  $inputType = 'email';
                 } elseif ($fieldTypeId === 28) {
                   $inputType = 'datetime-local';
                 } elseif ($fieldTypeId === 13) {
@@ -988,6 +1034,12 @@ $formTitle = $form['title'] ?? 'Form';
             <i class="fa-solid fa-floppy-disk me-1"></i> Save
           </button>
         </form>
+        <?php if (($CMS_USER['userrole'] ?? 1) >= $showDebugRole): ?>
+          <div class="alert alert-warning mt-4 d-none cms-client-debug" aria-live="polite">
+            <strong>Client Debug</strong>
+            <pre class="bg-light border rounded p-3 mb-0 cms-client-debug-pre"></pre>
+          </div>
+        <?php endif; ?>
         <?php if (!empty($debugSql) && (($CMS_USER['userrole'] ?? 1) >= $showDebugRole)): ?>
           <div class="alert alert-info mt-4">
             <strong>Debug</strong>

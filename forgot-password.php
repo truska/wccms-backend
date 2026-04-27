@@ -19,18 +19,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($user) {
-      // Create a one-time token that expires after 1 hour.
+      // Create a one-time token that expires after 1 hour (using DB/UTC time to avoid TZ drift).
       $token = bin2hex(random_bytes(32));
       $tokenHash = hash('sha256', $token);
-      $expires = (new DateTime('+1 hour'))->format('Y-m-d H:i:s');
 
-      $sql = 'INSERT INTO cms_password_resets (name, user_id, token_hash, expires_at, request_ip) VALUES (:name, :user_id, :token_hash, :expires_at, :request_ip)';
+      $sql = 'INSERT INTO cms_password_resets (name, user_id, token_hash, expires_at, request_ip) VALUES (:name, :user_id, :token_hash, UTC_TIMESTAMP() + INTERVAL 1 HOUR, :request_ip)';
       $pdo->prepare($sql)
         ->execute([
           ':name' => 'reset',
           ':user_id' => $user['id'],
           ':token_hash' => $tokenHash,
-          ':expires_at' => $expires,
           ':request_ip' => $_SERVER['REMOTE_ADDR'] ?? null,
         ]);
       cms_log_action('password_reset_request', 'cms_password_resets', null, $sql, 'forgot-password', 'cms');
