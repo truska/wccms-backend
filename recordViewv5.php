@@ -664,6 +664,7 @@ $perPage = 25;
 $sortColumn = 'id';
 $sortDir = 'asc';
 $filters = [];
+$recordIdFilterKey = '__record_id';
 $globalSearch = '';
 $columnMeta = [];
 $showArchived = false;
@@ -712,6 +713,7 @@ if (!$errors && $contentTable) {
   if (!is_array($filters)) {
     $filters = [];
   }
+  $recordIdFilterValue = trim((string) ($filters[$recordIdFilterKey] ?? ''));
 
   // Search/sort/paging inputs (with defaults).
   $globalSearch = (string) ($_GET['q'] ?? '');
@@ -776,6 +778,11 @@ if (!$errors && $contentTable) {
       'raw_expr' => $expr,
       'lookup_label' => $lookupLabelField,
     ];
+  }
+
+  if ($recordIdFilterValue !== '') {
+    $where[] = "c.`{$idField}` = :f_record_id";
+    $params[':f_record_id'] = $recordIdFilterValue;
   }
 
   // Apply column filters.
@@ -959,7 +966,9 @@ if (!$errors && $contentTable) {
                   <th class="text-center cms-record-actions">Action</th>
                 </tr>
                 <tr class="cms-table-filters">
-                  <th></th>
+                  <th class="cms-record-id">
+                    <input type="text" name="f[<?php echo cms_h($recordIdFilterKey); ?>]" value="<?php echo cms_h((string) ($filters[$recordIdFilterKey] ?? '')); ?>" class="form-control form-control-sm" placeholder="Search">
+                  </th>
                   <?php foreach ($columnMeta as $field => $meta): ?>
                     <th>
                       <?php $value = $filters[$field] ?? ''; ?>
