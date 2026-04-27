@@ -1345,6 +1345,12 @@ if (!isset($galleryItems)) {
             <i class="fa-solid fa-floppy-disk me-1"></i> Save
           </button>
         </form>
+        <?php if (($CMS_USER['userrole'] ?? 1) >= $showDebugRole): ?>
+          <div class="alert alert-warning mt-4 d-none cms-client-debug" aria-live="polite">
+            <strong>Client Debug</strong>
+            <pre class="bg-light border rounded p-3 mb-0 cms-client-debug-pre"></pre>
+          </div>
+        <?php endif; ?>
         <?php if (!empty($debugSql) && (($CMS_USER['userrole'] ?? 1) >= $showDebugRole)): ?>
           <div class="alert alert-info mt-4">
             <strong>Debug</strong>

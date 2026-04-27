@@ -161,6 +161,8 @@
     const tabScope = form.closest('.cms-card') || document;
     const tabButtons = tabScope.querySelectorAll('[data-bs-toggle="tab"]');
     const saveButton = form.querySelector('.cms-save-button[type="submit"], .cms-save-button');
+    const clientDebug = form.parentElement ? form.parentElement.querySelector('.cms-client-debug') : null;
+    const clientDebugPre = clientDebug ? clientDebug.querySelector('.cms-client-debug-pre') : null;
     let invalidJumpActive = false;
     let uploadSubmitPending = false;
 
@@ -194,6 +196,85 @@
       });
     });
 
+    const boolText = (value) => (value ? 'yes' : 'no');
+
+    const elementIsHidden = (element) => {
+      if (!element) {
+        return false;
+      }
+      if (element.type === 'hidden' || element.hidden) {
+        return true;
+      }
+      const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+      return !!(style && (style.display === 'none' || style.visibility === 'hidden')) || element.offsetParent === null;
+    };
+
+    const paneIsHidden = (element) => {
+      const pane = element ? element.closest('.tab-pane') : null;
+      if (!pane) {
+        return false;
+      }
+      const style = window.getComputedStyle ? window.getComputedStyle(pane) : null;
+      return !pane.classList.contains('active') || !!(style && (style.display === 'none' || style.visibility === 'hidden'));
+    };
+
+    const findTinyMceEditor = (element) => {
+      if (!window.tinymce || !element) {
+        return null;
+      }
+      if (element.id && typeof window.tinymce.get === 'function') {
+        const byId = window.tinymce.get(element.id);
+        if (byId) {
+          return byId;
+        }
+      }
+      const editors = Array.isArray(window.tinymce.editors) ? window.tinymce.editors : [];
+      return editors.find((editor) => editor && editor.targetElm === element) || null;
+    };
+
+    const writeClientDebug = (message, invalidField) => {
+      if (!clientDebug || !clientDebugPre) {
+        return;
+      }
+      const lines = [
+        'Submit attempted',
+        `Form valid: ${invalidField ? 'no' : 'yes'}`,
+        message,
+      ];
+
+      if (invalidField) {
+        const tinyMceDetected = invalidField.classList.contains('cms-tinymce');
+        const editor = tinyMceDetected ? findTinyMceEditor(invalidField) : null;
+        const editorContent = editor && typeof editor.getContent === 'function' ? editor.getContent() : '';
+        const fieldValue = typeof invalidField.value === 'string' ? invalidField.value : '';
+
+        lines.push(
+          `Invalid field: ${invalidField.name || ''}`,
+          `Element id: ${invalidField.id || ''}`,
+          `Tag: ${invalidField.tagName ? invalidField.tagName.toLowerCase() : ''}`,
+          `Type: ${invalidField.type || ''}`,
+          `Hidden: ${boolText(elementIsHidden(invalidField))}`,
+          `Disabled: ${boolText(invalidField.disabled)}`,
+          `In hidden tab: ${boolText(paneIsHidden(invalidField))}`,
+          `Validation message: ${invalidField.validationMessage || ''}`
+        );
+
+        if (tinyMceDetected) {
+          lines.push(
+            'TinyMCE detected: yes',
+            `window.tinymce present: ${boolText(!!window.tinymce)}`,
+            `Editor instance found: ${boolText(!!editor)}`,
+            `Editor content length: ${editorContent.length}`,
+            `Textarea value length: ${fieldValue.length}`,
+            `Editor content synced to textarea: ${editor ? boolText(editorContent === fieldValue) : 'unknown'}`
+          );
+        }
+      }
+
+      clientDebugPre.textContent = lines.join('\n');
+      clientDebug.classList.remove('d-none');
+    };
+
     form.addEventListener('invalid', (event) => {
       if (invalidJumpActive) {
         return;
@@ -203,6 +284,8 @@
         return;
       }
       event.preventDefault();
+      writeClientDebug('Submit blocked by browser validation', firstInvalid);
+      console.log('CMS client validation: submit blocked in browser', firstInvalid);
       invalidJumpActive = true;
 
       const focusInvalid = () => {
@@ -233,6 +316,8 @@
     }, true);
 
     form.addEventListener('submit', () => {
+      writeClientDebug('Form valid: yes');
+      console.log('CMS client validation: submit allowed and sent to server');
       if (uploadSubmitPending) {
         return;
       }
