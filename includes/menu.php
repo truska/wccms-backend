@@ -56,7 +56,38 @@ function cms_menu_is_active(string $url, string $currentPath, array $currentQuer
   return true;
 }
 
-// Load menu rows the current user can access.
+/**
+ * Apply per-row visibility rules for the current CMS user.
+ */
+function cms_menu_row_is_visible(array $row, int $userRole): bool {
+  if ((string) ($row['showonweb'] ?? 'No') !== 'Yes') {
+    return false;
+  }
+  if ((int) ($row['archived'] ?? 0) !== 0) {
+    return false;
+  }
+
+  return (int) ($row['userrole'] ?? 1) <= $userRole;
+}
+
+if (!function_exists('cms_render_copyright_notice')) {
+  /**
+   * Build a standard copyright notice from site preferences.
+   */
+  function cms_render_copyright_notice(string $companyName): string {
+    $currentYear = date('Y');
+    $startYear = trim((string) cms_pref('prefCopyrightStartYear', ''));
+    $yearText = $currentYear;
+
+    if ($startYear !== '' && preg_match('/^\d{4}$/', $startYear) && $startYear !== $currentYear) {
+      $yearText = $startYear . ' &mdash; ' . $currentYear;
+    }
+
+    return '&copy; ' . $yearText . ' ' . cms_h($companyName) . '. All rights reserved.';
+  }
+}
+
+// Load menu rows so hierarchy-aware access can be applied in PHP.
 if (isset($CMS_USER['id']) && $DB_OK && $pdo instanceof PDO && cms_menu_table_exists($pdo, 'cms_menu')) {
   try {
     $roleStmt = $pdo->prepare('SELECT userrole FROM cms_users WHERE id = :id LIMIT 1');
@@ -70,8 +101,8 @@ if (isset($CMS_USER['id']) && $DB_OK && $pdo instanceof PDO && cms_menu_table_ex
   }
 
   try {
-    $stmt = $pdo->prepare("SELECT * FROM cms_menu WHERE showonweb = 'Yes' AND archived = 0 AND userrole <= :role ORDER BY section ASC, subsection ASC, id ASC");
-    $stmt->execute([':role' => $cmsMenuUserRole]);
+    $stmt = $pdo->prepare('SELECT * FROM cms_menu ORDER BY section ASC, subsection ASC, id ASC');
+    $stmt->execute();
     $cmsMenuRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
   } catch (PDOException $e) {
     $cmsMenuRows = [];
@@ -84,35 +115,44 @@ $menuSections = [];
 foreach ($cmsMenuRows as $row) {
   $sectionId = (int) ($row['section'] ?? 0);
   if (!isset($menuSections[$sectionId])) {
-    $menuSections[$sectionId] = ['rows' => []];
+    $menuSections[$sectionId] = [
+      'parent' => null,
+      'visible_rows' => [],
+    ];
   }
-  $menuSections[$sectionId]['rows'][] = $row;
+
+  if ((int) ($row['subsection'] ?? 0) === 0 && $menuSections[$sectionId]['parent'] === null) {
+    $menuSections[$sectionId]['parent'] = $row;
+  }
+
+  if (cms_menu_row_is_visible($row, $cmsMenuUserRole)) {
+    $menuSections[$sectionId]['visible_rows'][] = $row;
+  }
 }
 
 ksort($menuSections);
 
-$cmsVersion = trim((string) cms_pref('prefCSMVer', '1.0', 'cms'));
+$cmsVersion = trim((string) cms_pref('prefCMSVer', '', 'cms'));
+if ($cmsVersion === '') {
+  $cmsVersion = trim((string) cms_pref('prefCSMVer', '1.0', 'cms'));
+}
 $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', 'cms'));
 ?>
 <aside id="cmsSidebar" class="cms-sidebar">
   <div class="cms-sidebar-inner">
     <?php if (!$cmsMenuRows): ?>
       <div class="cms-menu-section">
-        <button class="cms-menu-title" type="button">
-          <i class="fa-solid fa-user-gear"></i>
-          <span>Admin</span>
-          <i class="fa-solid fa-chevron-down ms-auto"></i>
-        </button>
+        <div class="cms-menu-heading">Admin</div>
         <div class="cms-menu-sub">
-          <a href="<?php echo $CMS_BASE_URL; ?>/dashboard.php" class="cms-menu-link">CMS Home</a>
-          <a href="<?php echo $baseURL; ?>/index.php" class="cms-menu-link" target="_blank" rel="noopener">Site Home</a>
+          <a href="<?php echo $CMS_BASE_URL; ?>/dashboard.php" class="cms-menu-link cms-menu-link-root">CMS Home</a>
+          <a href="<?php echo $baseURL; ?>/index.php" class="cms-menu-link cms-menu-link-root" target="_blank" rel="noopener">Site Home</a>
         </div>
       </div>
     <?php else: ?>
-      <nav class="cms-menu">
+      <nav class="cms-menu" id="cmsMenuNav">
         <?php foreach ($menuSections as $sectionId => $section): ?>
           <?php
-          $rows = $section['rows'];
+          $rows = $section['visible_rows'];
           usort($rows, static function ($a, $b) {
             $sa = (int) ($a['subsection'] ?? 0);
             $sb = (int) ($b['subsection'] ?? 0);
@@ -122,24 +162,21 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
             return $sa <=> $sb;
           });
 
-          $parent = null;
-          $children = [];
-          foreach ($rows as $row) {
-            $sub = (int) ($row['subsection'] ?? 0);
-            if ($sub === 0 && !$parent) {
-              $parent = $row;
-            } else {
-              $children[] = $row;
-            }
-          }
-
-          if (!$parent && $rows) {
-            $parent = array_shift($rows);
-            $children = $rows;
-          }
-
+          $parent = $section['parent'];
           if (!$parent) {
             continue;
+          }
+
+          $parentVisible = cms_menu_row_is_visible($parent, $cmsMenuUserRole);
+
+          $children = [];
+          if ($parentVisible) {
+            foreach ($rows as $row) {
+              $sub = (int) ($row['subsection'] ?? 0);
+              if ($sub !== 0) {
+                $children[] = $row;
+              }
+            }
           }
 
           $hasDropdown = !empty($children);
@@ -157,7 +194,18 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
           }
           $isActive = $url ? cms_menu_is_active($url, $cmsMenuPath, $cmsMenuQuery) : false;
           ?>
-          <?php if ($hasDropdown): ?>
+          <?php if (!$parentVisible): ?>
+            <div class="cms-menu-group">
+              <button class="cms-menu-item cms-menu-toggle is-disabled" type="button" disabled aria-disabled="true">
+                <span class="cms-menu-main">
+                  <?php if ($iconClass): ?>
+                    <i class="<?php echo cms_h($iconClass); ?> cms-menu-icon" aria-hidden="true"></i>
+                  <?php endif; ?>
+                  <span class="cms-menu-label"><?php echo cms_h($title); ?></span>
+                </span>
+              </button>
+            </div>
+          <?php elseif ($hasDropdown): ?>
             <div class="cms-menu-group">
               <?php
               $childActive = false;
@@ -176,16 +224,20 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
                   break;
                 }
               }
-              $expanded = $childActive ? 'true' : 'false';
+              $expanded = 'false';
               ?>
               <button class="cms-menu-item cms-menu-toggle <?php echo $childActive ? 'active' : ''; ?>" type="button" data-bs-toggle="collapse" data-bs-target="#cms-menu-<?php echo $sectionId; ?>" aria-expanded="<?php echo $expanded; ?>">
-                <?php if ($iconClass): ?>
-                  <i class="<?php echo cms_h($iconClass); ?>"></i>
-                <?php endif; ?>
-                <span><?php echo cms_h($title); ?></span>
-                <i class="fa-solid fa-chevron-down ms-auto"></i>
+                <span class="cms-menu-main">
+                  <?php if ($iconClass): ?>
+                    <i class="<?php echo cms_h($iconClass); ?> cms-menu-icon" aria-hidden="true"></i>
+                  <?php endif; ?>
+                  <span class="cms-menu-label"><?php echo cms_h($title); ?></span>
+                </span>
+                <span class="cms-menu-caret" aria-hidden="true">
+                  <i class="fa-solid fa-chevron-down"></i>
+                </span>
               </button>
-              <div class="collapse cms-menu-sub <?php echo $childActive ? 'show' : ''; ?>" id="cms-menu-<?php echo $sectionId; ?>">
+              <div class="collapse cms-menu-sub" id="cms-menu-<?php echo $sectionId; ?>" data-bs-parent="#cmsMenuNav">
                 <?php foreach ($children as $item): ?>
                   <?php
                   $childTitle = $item['title'] ?? 'Link';
@@ -201,18 +253,18 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
                   }
                   $childIsActive = $childUrl ? cms_menu_is_active($childUrl, $cmsMenuPath, $cmsMenuQuery) : false;
                   ?>
-                  <a class="cms-menu-link <?php echo $childIsActive ? 'active' : ''; ?>" href="<?php echo cms_h($childUrl ?: '#'); ?>"<?php echo $childTarget ? ' target="' . cms_h($childTarget) . '"' : ''; ?>>
+                  <a class="cms-menu-link cms-menu-link-child <?php echo $childIsActive ? 'active' : ''; ?>" href="<?php echo cms_h($childUrl ?: '#'); ?>"<?php echo $childTarget ? ' target="' . cms_h($childTarget) . '"' : ''; ?>>
                     <?php echo cms_h($childTitle); ?>
                   </a>
                 <?php endforeach; ?>
               </div>
             </div>
           <?php else: ?>
-            <a class="cms-menu-item <?php echo $isActive ? 'active' : ''; ?>" href="<?php echo cms_h($url ?: '#'); ?>"<?php echo $target ? ' target="' . cms_h($target) . '"' : ''; ?>>
+            <a class="cms-menu-link cms-menu-link-root <?php echo $isActive ? 'active' : ''; ?>" href="<?php echo cms_h($url ?: '#'); ?>"<?php echo $target ? ' target="' . cms_h($target) . '"' : ''; ?>>
               <?php if ($iconClass): ?>
-                <i class="<?php echo cms_h($iconClass); ?>"></i>
+                <i class="<?php echo cms_h($iconClass); ?> cms-menu-icon" aria-hidden="true"></i>
               <?php endif; ?>
-              <span><?php echo cms_h($title); ?></span>
+              <span class="cms-menu-label"><?php echo cms_h($title); ?></span>
             </a>
           <?php endif; ?>
         <?php endforeach; ?>
@@ -224,14 +276,14 @@ $cmsSidebarLogo = trim((string) cms_pref('prefLogo1', 'witecanvas-logo-s.png', '
       <div>User: <?php echo cms_h($CMS_USER['display_name'] ?? 'Guest'); ?></div>
       <div>Username: <?php echo cms_h($CMS_USER['email'] ?? ''); ?></div>
       <div>Role: <?php echo cms_h((string) $cmsMenuUserRole); ?></div>
-      <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '1.0'); ?></div>
       <div>User IP: <?php echo cms_h($_SERVER['REMOTE_ADDR'] ?? ''); ?></div>
     </div>
 
     <div class="cms-sidebar-footer">
       <img src="<?php echo $baseURL; ?>/filestore/images/logos/<?php echo cms_h($cmsSidebarLogo !== '' ? $cmsSidebarLogo : 'witecanvas-logo-s.png'); ?>" alt="wITeCanvas" class="cms-sidebar-logo">
-      <div>© wITeCanvas 2020 - 2026</div>
-      <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '1.0'); ?></div>
+      
+      <div>CMS Ver: <?php echo cms_h($cmsVersion !== '' ? $cmsVersion : '5.0'); ?></div>
+      <div><?php echo cms_render_copyright_notice('wITeCanvas'); ?></div>
     </div>
   </div>
 </aside>

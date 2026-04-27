@@ -120,6 +120,29 @@ function cms_media_resize_image($source, int $targetWidth, int $targetHeight) {
   return $dest;
 }
 
+function cms_media_upload_error_message(array $file): string {
+  $name = (string) ($file['name'] ?? 'file');
+  $code = $file['error'] ?? UPLOAD_ERR_OK;
+  switch ($code) {
+    case UPLOAD_ERR_INI_SIZE:
+      return $name . ' exceeds the server upload limit (' . ini_get('upload_max_filesize') . ').';
+    case UPLOAD_ERR_FORM_SIZE:
+      return $name . ' exceeds the form upload limit.';
+    case UPLOAD_ERR_PARTIAL:
+      return $name . ' was only partially uploaded. Please try again.';
+    case UPLOAD_ERR_NO_FILE:
+      return 'No file was uploaded.';
+    case UPLOAD_ERR_NO_TMP_DIR:
+      return 'Upload failed: missing temporary folder on the server.';
+    case UPLOAD_ERR_CANT_WRITE:
+      return 'Upload failed: cannot write file to disk (check permissions).';
+    case UPLOAD_ERR_EXTENSION:
+      return 'Upload blocked by a PHP extension.';
+    default:
+      return 'Upload failed.';
+  }
+}
+
 function cms_media_store_upload(array $file, array $field, array $record, int $formId, int $recordId, array $options = []): array {
   $errors = [];
   $result = [
@@ -133,8 +156,8 @@ function cms_media_store_upload(array $file, array $field, array $record, int $f
     'master_written' => false,
   ];
 
-  if (!isset($file['tmp_name']) || $file['tmp_name'] === '' || $file['error'] !== UPLOAD_ERR_OK) {
-    $errors[] = 'Upload failed.';
+  if (!isset($file['tmp_name']) || $file['tmp_name'] === '' || ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+    $errors[] = cms_media_upload_error_message($file);
     return $result;
   }
 
@@ -184,7 +207,7 @@ function cms_media_store_upload(array $file, array $field, array $record, int $f
   if (!$isImage) {
     $dest = $baseDir . $filename;
     if (!move_uploaded_file($file['tmp_name'], $dest)) {
-      $errors[] = 'Failed to move uploaded file.';
+      $errors[] = 'Failed to move uploaded file to ' . $dest . ' (check permissions).';
       return $result;
     }
     $result['ok'] = true;

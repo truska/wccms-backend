@@ -287,6 +287,11 @@ function cms_get_form_view_columns(PDO $pdo, array $form, string $contentTable):
  * Load action buttons configured for a form.
  */
 function cms_get_form_actions(PDO $pdo, array $form): array {
+  $formId = isset($form['id']) ? (int) $form['id'] : 0;
+  if ($formId <= 0) {
+    return [];
+  }
+
   if (!cms_table_exists($pdo, 'cms_form_actions') || !cms_table_exists($pdo, 'cms_actions')) {
     return [];
   }
@@ -331,16 +336,26 @@ function cms_get_form_actions(PDO $pdo, array $form): array {
   }
 
   $stmt = $pdo->prepare($sql);
-  $stmt->execute([':form_id' => $form['id'] ?? 0]);
+  $stmt->execute([':form_id' => $formId]);
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
   $actions = [];
 
   foreach ($rows as $row) {
+    $label = trim((string) ($labelField ? ($row[$labelField] ?? '') : ($row['name'] ?? '')));
+    $slug = trim((string) ($slugField ? ($row[$slugField] ?? '') : ($row['name'] ?? '')));
+    $url = trim((string) ($urlField ? ($row[$urlField] ?? '') : ''));
+    $icon = trim((string) ($iconField ? ($row[$iconField] ?? '') : ''));
+
+    // Ignore rows that cannot produce any actionable button.
+    if ($label === '' && $slug === '' && $url === '' && $icon === '') {
+      continue;
+    }
+
     $actions[] = [
-      'label' => $labelField ? ($row[$labelField] ?? '') : ($row['name'] ?? ''),
-      'slug' => $slugField ? ($row[$slugField] ?? '') : ($row['name'] ?? ''),
-      'icon' => $iconField ? ($row[$iconField] ?? '') : '',
-      'url' => $urlField ? ($row[$urlField] ?? '') : '',
+      'label' => $label,
+      'slug' => $slug,
+      'icon' => $icon,
+      'url' => $url,
       'tooltip' => $tooltipField ? ($row[$tooltipField] ?? '') : '',
       'confirm' => $confirmField ? ($row[$confirmField] ?? '') : '',
       'confirm_text' => $confirmTextField ? ($row[$confirmTextField] ?? '') : '',
@@ -653,6 +668,7 @@ $globalSearch = '';
 $columnMeta = [];
 $showArchived = false;
 $showOnWebField = null;
+$formWhereClause = '';
 
 if (!$errors && $contentTable) {
   // Build column metadata and SQL query parts.
@@ -666,6 +682,10 @@ if (!$errors && $contentTable) {
   $archivedField = cms_pick_column($contentCols, ['archived']);
   $formColumns = cms_table_columns($pdo, 'cms_form');
   $showArchivedField = cms_pick_column($formColumns, ['showarchived', 'show_archived', 'show_archived_records']);
+  $whereClauseField = cms_pick_column($formColumns, ['where1']);
+  if ($whereClauseField && !empty($form[$whereClauseField])) {
+    $formWhereClause = trim((string) $form[$whereClauseField]);
+  }
   if ($showArchivedField && isset($form[$showArchivedField])) {
     $showArchived = cms_is_yes($form[$showArchivedField]);
   }
@@ -694,7 +714,7 @@ if (!$errors && $contentTable) {
   }
 
   // Search/sort/paging inputs (with defaults).
-  $globalSearch = trim((string) ($_GET['q'] ?? ''));
+  $globalSearch = (string) ($_GET['q'] ?? '');
   $sortColumn = (string) ($_GET['sort'] ?? $idField);
   $sortDir = strtolower((string) ($_GET['dir'] ?? 'asc'));
   if (!in_array($sortDir, ['asc', 'desc'], true)) {
@@ -787,6 +807,11 @@ if (!$errors && $contentTable) {
     $where[] = "c.`{$archivedField}` = 0";
   }
 
+  if ($formWhereClause !== '') {
+    // Apply custom form-level WHERE snippet if provided.
+    $where[] = '(' . $formWhereClause . ')';
+  }
+
   // Global search across visible columns.
   if ($globalSearch !== '') {
     $likes = [];
@@ -853,6 +878,7 @@ if (!$errors && $contentTable) {
     <?php else: ?>
       <div class="cms-card">
         <form method="get" class="cms-table-controls">
+          <input type="hidden" name="_active" value="<?php echo cms_h((string) ($_GET['_active'] ?? '')); ?>">
           <?php if (!empty($_GET['frm'])): ?>
             <input type="hidden" name="frm" value="<?php echo cms_h((string) $_GET['frm']); ?>">
           <?php elseif (!empty($_GET['form_id'])): ?>
@@ -888,29 +914,8 @@ if (!$errors && $contentTable) {
             </div>
           </div>
 
-          <div class="table-responsive mt-4">
-            <style>
-              .cms-sort-link {
-                color: inherit;
-              }
-              .cms-sort-link:hover {
-                color: inherit;
-              }
-              .cms-sort-arrows {
-                display: inline-flex;
-                flex-direction: column;
-                align-items: center;
-                line-height: 0.72;
-                font-size: 10px;
-                color: #bcc2cc;
-                min-width: 10px;
-              }
-              .cms-sort-arrows .is-active {
-                color: #6a717d;
-                font-weight: 700;
-              }
-            </style>
-            <table class="table table-hover align-middle cms-table">
+          <div class="table-responsive mt-4 cms-record-grid-wrap">
+            <table class="table table-hover align-middle cms-table cms-record-grid">
               <?php
               $sortBaseQuery = $_GET;
               $sortBaseQuery['page'] = 1;
@@ -924,7 +929,7 @@ if (!$errors && $contentTable) {
                   $idDownActive = ($idIsCurrentSort && $sortDir === 'desc');
                   $idSortQuery = array_merge($sortBaseQuery, ['sort' => $idField, 'dir' => $idNextDir]);
                   ?>
-                  <th>
+                  <th class="cms-record-id">
                     <a class="cms-sort-link text-decoration-none d-flex align-items-center justify-content-between gap-2 w-100" href="?<?php echo cms_h(http_build_query($idSortQuery)); ?>">
                       <span>ID</span>
                       <span class="cms-sort-arrows" aria-hidden="true">
@@ -951,7 +956,7 @@ if (!$errors && $contentTable) {
                       </a>
                     </th>
                   <?php endforeach; ?>
-                  <th class="text-center">Action</th>
+                  <th class="text-center cms-record-actions">Action</th>
                 </tr>
                 <tr class="cms-table-filters">
                   <th></th>
@@ -1007,7 +1012,7 @@ if (!$errors && $contentTable) {
                 <?php else: ?>
                   <?php foreach ($records as $row): ?>
                     <tr>
-                      <td><?php echo cms_h((string) $row['__record_id']); ?></td>
+                      <td class="cms-record-id"><?php echo cms_h((string) $row['__record_id']); ?></td>
                       <?php foreach ($columnMeta as $field => $meta): ?>
                         <?php
                         $display = (string) ($row[$meta['display']] ?? '');
@@ -1020,12 +1025,15 @@ if (!$errors && $contentTable) {
                         <?php $rule = $ruleId && isset($viewRules[$ruleId]) ? $viewRules[$ruleId] : null; ?>
                         <td><?php echo cms_render_rule_value($display, $rule); ?></td>
                       <?php endforeach; ?>
-                      <td class="text-center">
+                      <td class="text-center cms-record-actions">
                         <?php if ($actions): ?>
                           <div class="cms-action-buttons">
                             <?php foreach ($actions as $action): ?>
                               <?php
-                              $label = $action['label'] ?: $action['slug'];
+                              $label = trim((string) ($action['label'] ?? ''));
+                              if ($label === '') {
+                                $label = trim((string) ($action['slug'] ?? ''));
+                              }
                               $href = $action['url'] ? $action['url'] : '#';
                               $actionKey = cms_action_key((string) $action['url']);
                               if ($actionKey === '') {
@@ -1099,7 +1107,10 @@ if (!$errors && $contentTable) {
                                   $iconClass = $iconRaw;
                                 }
                               }
-                              $hasIconClass = $iconClass !== '' && preg_match('/[a-zA-Z]/', $iconClass);
+                              // Only hide text when the icon class looks like a real icon class.
+                              // This avoids unreadable "thin bar" buttons when DB icon values are invalid.
+                              $hasIconClass = $iconClass !== ''
+                                && preg_match('/(^|\\s)(fa([a-z-]*)?|icon-[A-Za-z0-9_-]+|bi)(\\s|$)|fa-[A-Za-z0-9-]+/', $iconClass);
                               if (!empty($action['bg']) && (str_contains($action['bg'], ',') || str_contains($action['bg'], '|') || (str_contains($action['bg'], '#') && !str_starts_with($action['bg'], '#')))) {
                                 $bgRaw = (string) $action['bg'];
                                 if (str_contains($bgRaw, ',') || str_contains($bgRaw, '|')) {
@@ -1132,6 +1143,15 @@ if (!$errors && $contentTable) {
                                 $tooltipText = $isVisible ? $hideText : $showText;
                                 if ($tooltipText === '') {
                                   $tooltipText = $label;
+                                }
+                              }
+                              if ($label === '') {
+                                if ($tooltipText !== '') {
+                                  $label = $tooltipText;
+                                } elseif ($actionKey !== '') {
+                                  $label = ucwords(str_replace('_', ' ', $actionKey));
+                                } else {
+                                  $label = 'Action';
                                 }
                               }
                               $tooltipAttr = $tooltipText !== '' ? ' data-bs-toggle="tooltip" title="' . cms_h($tooltipText) . '"' : '';
@@ -1183,4 +1203,88 @@ if (!$errors && $contentTable) {
     <?php endif; ?>
   </main>
 </div>
+<?php if (!$errors && $contentTable): ?>
+  <script>
+    // Persist last-used table controls for this form within the current browser session.
+    (() => {
+      const safeSessionStorage = (() => {
+        try {
+          const testKey = '__cms_state_test';
+          sessionStorage.setItem(testKey, '1');
+          sessionStorage.removeItem(testKey);
+          return true;
+        } catch (err) {
+          return false;
+        }
+      })();
+      if (!safeSessionStorage) {
+        return;
+      }
+
+      const formId = <?php echo json_encode((string) ($form['id'] ?? '')); ?>;
+      const tableName = <?php echo json_encode((string) $contentTable); ?>;
+      const formKeyRaw = <?php echo json_encode((string) $formKey); ?>;
+      const storageKey = `cms_record_view_state_${formId || tableName || 'default'}`;
+      const allowedKeys = new Set(['q', 'sort', 'dir', 'page', 'frm', 'form', 'form_id', '_active']);
+      const blockedKeys = new Set(['act', 'show', 'id', 'action']);
+      const filterPrefix = 'f[';
+
+      const ensureFormParam = (params) => {
+        if (params.has('frm') || params.has('form') || params.has('form_id')) {
+          return;
+        }
+        if (formKeyRaw !== '') {
+          params.set('frm', formKeyRaw);
+        }
+      };
+
+      const sanitizeParams = (source) => {
+        const clean = new URLSearchParams();
+        source.forEach((value, key) => {
+          if (blockedKeys.has(key)) {
+            return;
+          }
+          if (allowedKeys.has(key) || key.startsWith(filterPrefix)) {
+            if (value !== '') {
+              clean.append(key, value);
+            }
+          }
+        });
+        ensureFormParam(clean);
+        return clean;
+      };
+
+      const hasMeaningfulState = (params) => {
+        let meaningful = false;
+        params.forEach((value, key) => {
+          if (!value) {
+            return;
+          }
+          if (key === 'frm' || key === 'form' || key === 'form_id' || key === '_active') {
+            return;
+          }
+          meaningful = true;
+        });
+        return meaningful;
+      };
+
+      const currentParams = new URLSearchParams(window.location.search);
+      const currentState = sanitizeParams(currentParams);
+      const storedRaw = sessionStorage.getItem(storageKey);
+      const storedState = storedRaw ? sanitizeParams(new URLSearchParams(storedRaw)) : null;
+
+      if (storedState && storedState.toString() !== currentState.toString() && !hasMeaningfulState(currentState)) {
+        const redirectParams = new URLSearchParams(storedState.toString());
+        ensureFormParam(redirectParams);
+        const target = `${location.pathname}?${redirectParams.toString()}`;
+        if (target !== location.href) {
+          window.location.replace(target);
+          return;
+        }
+      }
+
+      sessionStorage.setItem(storageKey, currentState.toString());
+    })();
+  </script>
+<?php endif; ?>
 <?php include __DIR__ . '/includes/footer-code.php'; ?>

@@ -41,7 +41,7 @@ function cms_login(string $identifier, string $password, string &$error = null):
     return false;
   }
 
-  $sql = 'SELECT u.id, u.username, u.name, u.firstname, u.surname, u.password, u.userrole, u.archived, u.showonweb, r.name AS role_name
+  $sql = 'SELECT u.id, u.username, u.name, u.firstname, u.surname, u.password, u.userrole, u.archived, u.showonweb, u.image, u.gender, r.name AS role_name
           FROM cms_users u
           LEFT JOIN cms_userrole r ON r.id = u.userrole
           WHERE u.username = :id
@@ -71,6 +71,8 @@ function cms_login(string $identifier, string $password, string &$error = null):
     'username' => $user['username'],
     'email' => $user['username'],
     'display_name' => $displayName ?: $user['username'],
+    'image' => trim((string) ($user['image'] ?? '')),
+    'gender' => trim((string) ($user['gender'] ?? '')),
     'role' => $user['role_name'] ?: (string) $user['userrole'],
   ];
 

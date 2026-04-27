@@ -215,8 +215,8 @@ include __DIR__ . '/includes/header.php';
       <?php if (!$jobs): ?>
         <p class="mb-0 text-muted">No jobs recorded yet.</p>
       <?php else: ?>
-        <div class="table-responsive">
-          <table class="table table-sm align-middle">
+        <div class="table-responsive cms-record-grid-wrap">
+          <table class="table table-sm align-middle cms-record-grid">
             <thead>
               <tr>
                 <th>ID</th>

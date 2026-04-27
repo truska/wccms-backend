@@ -11,7 +11,7 @@ $redirect = false;
 // Validate token before showing the reset form.
 if ($token && $DB_OK && ($pdo instanceof PDO)) {
   $tokenHash = hash('sha256', $token);
-  $stmt = $pdo->prepare("SELECT user_id FROM cms_password_resets WHERE token_hash = :token_hash AND expires_at > NOW() AND used_at IS NULL AND archived = 0 AND showonweb = 'Yes' ORDER BY id DESC LIMIT 1");
+  $stmt = $pdo->prepare("SELECT user_id FROM cms_password_resets WHERE token_hash = :token_hash AND expires_at > UTC_TIMESTAMP() AND used_at IS NULL AND archived = 0 AND showonweb = 'Yes' ORDER BY id DESC LIMIT 1");
   $stmt->execute([':token_hash' => $tokenHash]);
   $row = $stmt->fetch(PDO::FETCH_ASSOC);
   if ($row) {
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $error = 'Database unavailable.';
   } else {
     $tokenHash = hash('sha256', $token);
-    $stmt = $pdo->prepare("SELECT user_id FROM cms_password_resets WHERE token_hash = :token_hash AND expires_at > NOW() AND used_at IS NULL AND archived = 0 AND showonweb = 'Yes' ORDER BY id DESC LIMIT 1");
+    $stmt = $pdo->prepare("SELECT user_id FROM cms_password_resets WHERE token_hash = :token_hash AND expires_at > UTC_TIMESTAMP() AND used_at IS NULL AND archived = 0 AND showonweb = 'Yes' ORDER BY id DESC LIMIT 1");
     $stmt->execute([':token_hash' => $tokenHash]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) {
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       ]);
       cms_log_action('password_reset_update', 'cms_users', (int) $row['user_id'], $sqlUser, 'reset-password', 'cms');
 
-      $sqlReset = "UPDATE cms_password_resets SET used_at = NOW(), modified = NOW(), showonweb = 'No' WHERE token_hash = :token_hash";
+      $sqlReset = "UPDATE cms_password_resets SET used_at = UTC_TIMESTAMP(), modified = UTC_TIMESTAMP(), showonweb = 'No' WHERE token_hash = :token_hash";
       $pdo->prepare($sqlReset)->execute([
         ':token_hash' => $tokenHash,
       ]);
