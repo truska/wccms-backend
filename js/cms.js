@@ -1,11 +1,32 @@
 (() => {
   // CMS UI helpers: sidebar toggle, Bootstrap tooltips, and menu accordion behavior.
   const burger = document.querySelector('.cms-burger');
+  const mobileMenu = window.matchMedia('(max-width: 991px)');
+  const setMenuExpanded = () => {
+    if (!burger) {
+      return;
+    }
+    const expanded = mobileMenu.matches
+      ? document.body.classList.contains('cms-mobile-menu-open')
+      : !document.body.classList.contains('cms-collapsed');
+    burger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  };
   if (burger) {
+    if (mobileMenu.matches) {
+      document.body.classList.remove('cms-collapsed', 'cms-mobile-menu-open');
+    }
+    setMenuExpanded();
     burger.addEventListener('click', () => {
-      document.body.classList.toggle('cms-collapsed');
-      const expanded = !document.body.classList.contains('cms-collapsed');
-      burger.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      if (mobileMenu.matches) {
+        document.body.classList.toggle('cms-mobile-menu-open');
+      } else {
+        document.body.classList.toggle('cms-collapsed');
+      }
+      setMenuExpanded();
+    });
+    mobileMenu.addEventListener('change', () => {
+      document.body.classList.remove('cms-collapsed', 'cms-mobile-menu-open');
+      setMenuExpanded();
     });
   }
 

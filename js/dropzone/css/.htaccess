@@ -1,0 +1,3 @@
+<Files *.[pP][hH][pP]>
+    Require all denied
+</Files>

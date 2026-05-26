@@ -70,7 +70,7 @@ function cms_menu_build_url(array $row, string $cmsBaseUrl): string {
 
   $path = parse_url($url, PHP_URL_PATH) ?: '';
   $file = basename($path);
-  $usesForm = in_array($file, ['recordViewv5.php', 'recordNewv5.php', 'recordEditv5.php', 'recordPreferencesv5.php', 'recordReportv4.php', 'recordBulkUpdatev1.php'], true);
+  $usesForm = in_array($file, ['recordViewv5.php', 'recordNewv5.php', 'recordEditv5.php', 'recordViewOliv5.php', 'recordNewOliv5.php', 'recordEditOliv5.php', 'recordPreferencesv5.php', 'recordReportv4.php', 'recordBulkUpdatev1.php'], true);
   if ($url !== '' && $formId > 0 && $usesForm && !preg_match('/(?:\\?|&)frm=/', $url)) {
     $url .= (str_contains($url, '?') ? '&' : '?') . 'frm=' . urlencode((string) $formId);
   }

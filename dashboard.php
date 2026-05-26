@@ -2,6 +2,24 @@
 require_once __DIR__ . '/includes/boot.php';
 // Protect the CMS dashboard from anonymous access.
 cms_require_login();
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'])) {
+  require __DIR__ . '/includes/payroll-hours-action.php';
+  exit;
+}
+
+$dashboardTab = (string) ($_GET['tab'] ?? 'welcome');
+$dashboardTabs = ['welcome', 'stats', 'payroll-hours', 'footer-debug'];
+if (!in_array($dashboardTab, $dashboardTabs, true)) {
+  $dashboardTab = 'welcome';
+}
+$dashboardTabActive = static function (string $tab) use ($dashboardTab): string {
+  return $dashboardTab === $tab ? ' active' : '';
+};
+$dashboardPaneActive = static function (string $tab) use ($dashboardTab): string {
+  return $dashboardTab === $tab ? ' show active' : '';
+};
+
 include __DIR__ . '/includes/header-code.php';
 include __DIR__ . '/includes/header.php';
 ?>
@@ -15,18 +33,21 @@ include __DIR__ . '/includes/header.php';
     <!-- Tabbed navigation for dashboard sections. -->
     <ul class="nav nav-tabs cms-tabs" role="tablist">
       <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="welcome-tab" data-bs-toggle="tab" data-bs-target="#welcome" type="button" role="tab">Welcome</button>
+        <button class="nav-link<?php echo $dashboardTabActive('welcome'); ?>" id="welcome-tab" data-bs-toggle="tab" data-bs-target="#welcome" type="button" role="tab">Welcome</button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">Stats</button>
+        <button class="nav-link<?php echo $dashboardTabActive('stats'); ?>" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">Stats</button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="footer-debug-tab" data-bs-toggle="tab" data-bs-target="#footer-debug" type="button" role="tab">Parameters</button>
+        <button class="nav-link<?php echo $dashboardTabActive('payroll-hours'); ?>" id="payroll-hours-tab" data-bs-toggle="tab" data-bs-target="#payroll-hours" type="button" role="tab">My Hours</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link<?php echo $dashboardTabActive('footer-debug'); ?>" id="footer-debug-tab" data-bs-toggle="tab" data-bs-target="#footer-debug" type="button" role="tab">Parameters</button>
       </li>
     </ul>
 
     <div class="tab-content pt-4">
-      <div class="tab-pane fade show active" id="welcome" role="tabpanel" aria-labelledby="welcome-tab">
+      <div class="tab-pane fade<?php echo $dashboardPaneActive('welcome'); ?>" id="welcome" role="tabpanel" aria-labelledby="welcome-tab">
         <div class="cms-card">
           <h2 class="h4 mb-3"><?php echo cms_h($CMS_NAME); ?></h2>
           <dl class="cms-kv">
@@ -41,12 +62,15 @@ include __DIR__ . '/includes/header.php';
           </dl>
         </div>
       </div>
-      <div class="tab-pane fade" id="stats" role="tabpanel" aria-labelledby="stats-tab">
+      <div class="tab-pane fade<?php echo $dashboardPaneActive('stats'); ?>" id="stats" role="tabpanel" aria-labelledby="stats-tab">
         <div class="cms-card">
           <p class="mb-0">Stats will populate here once wired to the database.</p>
         </div>
       </div>
-      <div class="tab-pane fade" id="footer-debug" role="tabpanel" aria-labelledby="footer-debug-tab">
+      <div class="tab-pane fade<?php echo $dashboardPaneActive('payroll-hours'); ?>" id="payroll-hours" role="tabpanel" aria-labelledby="payroll-hours-tab">
+        <?php include __DIR__ . '/includes/dashboard-payroll-hours.php'; ?>
+      </div>
+      <div class="tab-pane fade<?php echo $dashboardPaneActive('footer-debug'); ?>" id="footer-debug" role="tabpanel" aria-labelledby="footer-debug-tab">
         <div class="cms-card">
           <?php
             $footerDebugPath = dirname(__DIR__) . '/includes/footer-debug.php';

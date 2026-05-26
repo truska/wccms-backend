@@ -661,7 +661,7 @@ if (!$errors && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $data['source_form_name'] = $currentFormName;
           }
           if (in_array('showonweb', $columnNames, true) && !isset($data['showonweb'])) {
-            $data['showonweb'] = 'No';
+            $data['showonweb'] = 'Yes';
           }
           if (in_array('password', $columnNames, true) && !isset($data['password'])) {
             $raw = bin2hex(random_bytes(8));
