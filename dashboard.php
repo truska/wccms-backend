@@ -48,6 +48,8 @@ include __DIR__ . '/includes/header.php';
 
     <div class="tab-content pt-4">
       <div class="tab-pane fade<?php echo $dashboardPaneActive('welcome'); ?>" id="welcome" role="tabpanel" aria-labelledby="welcome-tab">
+        <?php include __DIR__ . '/includes/dashboard-drug-administration.php'; ?>
+
         <div class="cms-card">
           <h2 class="h4 mb-3"><?php echo cms_h($CMS_NAME); ?></h2>
           <dl class="cms-kv">
