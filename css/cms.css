@@ -430,6 +430,20 @@ a.link-email:focus {
   border-color: #73b531;
 }
 
+.cms-password-reveal {
+  min-width: 2.75rem;
+  color: var(--cms-muted);
+  background: #fff;
+  border-color: #ced4da;
+}
+
+.cms-password-reveal:hover,
+.cms-password-reveal:focus {
+  color: var(--cms-text);
+  background: #f1f3f6;
+  border-color: #adb5bd;
+}
+
 .cms-footer-links {
   display: flex;
   justify-content: space-between;

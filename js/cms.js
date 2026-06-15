@@ -17,6 +17,31 @@
     });
   }
 
+  // Reveal passwords only while the eye control is hovered, focused, or held.
+  const passwordRevealButtons = document.querySelectorAll('[data-password-reveal]');
+  passwordRevealButtons.forEach((button) => {
+    const passwordInput = document.getElementById(button.getAttribute('data-password-reveal'));
+    const icon = button.querySelector('i');
+
+    if (!passwordInput) {
+      return;
+    }
+
+    const setRevealed = (revealed) => {
+      passwordInput.type = revealed ? 'text' : 'password';
+      button.setAttribute('aria-pressed', revealed ? 'true' : 'false');
+      if (icon) {
+        icon.classList.toggle('fa-eye', !revealed);
+        icon.classList.toggle('fa-eye-slash', revealed);
+      }
+    };
+
+    button.addEventListener('pointerenter', () => setRevealed(true));
+    button.addEventListener('pointerleave', () => setRevealed(false));
+    button.addEventListener('focus', () => setRevealed(true));
+    button.addEventListener('blur', () => setRevealed(false));
+  });
+
   // Ensure only one menu group is expanded at a time.
   const menuGroups = document.querySelectorAll('.cms-menu-group');
   if (menuGroups.length) {

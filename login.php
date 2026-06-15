@@ -51,7 +51,12 @@ include __DIR__ . '/includes/header-code.php';
       </div>
       <div class="mb-3">
         <label class="form-label" for="password">Password</label>
-        <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required>
+        <div class="input-group">
+          <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required>
+          <button class="btn btn-outline-secondary cms-password-reveal" type="button" data-password-reveal="password" aria-label="Hold to reveal password" title="Hover to reveal password">
+            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+          </button>
+        </div>
       </div>
       <button class="btn btn-primary w-100" type="submit">Login</button>
     </form>

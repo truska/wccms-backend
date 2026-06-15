@@ -94,11 +94,21 @@ include __DIR__ . '/includes/header-code.php';
         <input type="hidden" name="token" value="<?php echo cms_h($token); ?>">
         <div class="mb-3">
           <label class="form-label" for="password">New Password</label>
-          <input type="password" class="form-control" id="password" name="password" required>
+          <div class="input-group">
+            <input type="password" class="form-control" id="password" name="password" autocomplete="new-password" required>
+            <button class="btn btn-outline-secondary cms-password-reveal" type="button" data-password-reveal="password" aria-label="Hold to reveal new password" title="Hover to reveal password">
+              <i class="fa-solid fa-eye" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label" for="confirm_password">Confirm Password</label>
-          <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+          <div class="input-group">
+            <input type="password" class="form-control" id="confirm_password" name="confirm_password" autocomplete="new-password" required>
+            <button class="btn btn-outline-secondary cms-password-reveal" type="button" data-password-reveal="confirm_password" aria-label="Hold to reveal confirmed password" title="Hover to reveal password">
+              <i class="fa-solid fa-eye" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
         <button class="btn btn-primary w-100" type="submit">Update password</button>
       </form>
