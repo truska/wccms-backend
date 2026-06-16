@@ -36,10 +36,21 @@
       }
     };
 
-    button.addEventListener('pointerenter', () => setRevealed(true));
-    button.addEventListener('pointerleave', () => setRevealed(false));
-    button.addEventListener('focus', () => setRevealed(true));
-    button.addEventListener('blur', () => setRevealed(false));
+    const reveal = () => setRevealed(true);
+    const conceal = () => setRevealed(false);
+
+    button.addEventListener('pointerenter', reveal);
+    button.addEventListener('pointerleave', conceal);
+    button.addEventListener('pointerdown', reveal);
+    button.addEventListener('pointerup', conceal);
+    button.addEventListener('pointercancel', conceal);
+    button.addEventListener('mousedown', reveal);
+    button.addEventListener('mouseup', conceal);
+    button.addEventListener('touchstart', reveal, { passive: true });
+    button.addEventListener('touchend', conceal);
+    button.addEventListener('touchcancel', conceal);
+    button.addEventListener('focus', reveal);
+    button.addEventListener('blur', conceal);
   });
 
   // Ensure only one menu group is expanded at a time.
