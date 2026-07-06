@@ -25,13 +25,12 @@
   $tinyToolbar = trim((string) cms_pref('prefTinyMCEToolbar', '', 'cms'));
   $tinyPlugins = trim((string) cms_pref('prefTinyMCEPlugins', '', 'cms'));
 
-  $tinySrc = '';
-  if ($tinyKey !== '') {
-    if (preg_match('/^https?:\\/\\//i', $tinyKey)) {
-      $tinySrc = $tinyKey;
-    } else {
-      $tinySrc = 'https://cdn.tiny.cloud/1/' . $tinyKey . '/tinymce/6/tinymce.min.js';
-    }
+  if ($tinyKey === '') {
+    $tinySrc = $CMS_BASE_URL . '/vendor/tinymce/tinymce.min.js';
+  } elseif (preg_match('/^https?:\\/\\//i', $tinyKey)) {
+    $tinySrc = $tinyKey;
+  } else {
+    $tinySrc = 'https://cdn.tiny.cloud/1/' . $tinyKey . '/tinymce/6/tinymce.min.js';
   }
 ?>
 <?php if ($tinySrc !== ''): ?>
