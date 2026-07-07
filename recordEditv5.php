@@ -231,6 +231,27 @@ function cms_gallery_thumb_url(array $item): string {
   return cms_media_url($mediatype, $folder, $filename, $size, true);
 }
 
+function cms_file_field_thumb_url(array $field, string $filename): string {
+  $filename = trim($filename);
+  if ($filename === '' || !preg_match('/\.(jpe?g|png|gif|webp)$/i', $filename)) {
+    return '';
+  }
+
+  $mediatype = trim((string) ($field['mediatype'] ?? 'images'), '/');
+  if ($mediatype === '') {
+    $mediatype = 'images';
+  }
+  $folder = trim((string) ($field['file_folder_name'] ?? ''), '/');
+
+  if (cms_media_variant_exists($mediatype, $folder, $filename, 'xs')) {
+    return cms_media_url($mediatype, $folder, $filename, 'xs', true);
+  }
+  if (cms_media_variant_exists($mediatype, $folder, $filename, 'master')) {
+    return cms_media_url($mediatype, $folder, $filename, 'master', true);
+  }
+  return '';
+}
+
 /**
  * Map a CMS field type label to an HTML input type.
  */
@@ -1105,18 +1126,28 @@ if (!isset($galleryItems)) {
                         <?php
                           $accept = cms_media_accept_attr($field['file_ext'] ?? '');
                           $inputName = 'cms_file_' . (int) ($field['id'] ?? 0);
+                          $currentFileThumbUrl = ($fieldName && !empty($record[$fieldName])) ? cms_file_field_thumb_url($field, (string) $record[$fieldName]) : '';
                         ?>
-                        <input class="form-control" type="file" id="field-<?php echo cms_h($fieldName); ?>" name="<?php echo cms_h($inputName); ?>" <?php echo $accept ? 'accept="' . cms_h($accept) . '"' : ''; ?> <?php echo $allowEdit ? '' : 'disabled'; ?>>
-                        <?php if ($fieldTypeId === 21 && $fieldName && !empty($record[$fieldName])): ?>
-                          <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
-                            <div class="form-text mt-0">Current: <?php echo cms_h((string) $record[$fieldName]); ?></div>
-                            <?php if ($allowEdit): ?>
-                              <button class="btn btn-sm btn-outline-danger" type="submit" name="cms_file_delete[<?php echo (int) ($field['id'] ?? 0); ?>]" value="1" onclick="return confirm('Delete this file from this record?')">
-                                <i class="fa-solid fa-trash me-1"></i>Delete
-                              </button>
+                        <div class="row g-3 align-items-center">
+                          <div class="<?php echo $currentFileThumbUrl ? 'col-12 col-md-10' : 'col-12'; ?>">
+                            <input class="form-control" type="file" id="field-<?php echo cms_h($fieldName); ?>" name="<?php echo cms_h($inputName); ?>" <?php echo $accept ? 'accept="' . cms_h($accept) . '"' : ''; ?> <?php echo $allowEdit ? '' : 'disabled'; ?>>
+                            <?php if ($fieldTypeId === 21 && $fieldName && !empty($record[$fieldName])): ?>
+                              <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                                <div class="form-text mt-0">Current: <?php echo cms_h((string) $record[$fieldName]); ?></div>
+                                <?php if ($allowEdit): ?>
+                                  <button class="btn btn-sm btn-outline-danger" type="submit" name="cms_file_delete[<?php echo (int) ($field['id'] ?? 0); ?>]" value="1" onclick="return confirm('Delete this file from this record?')">
+                                    <i class="fa-solid fa-trash me-1"></i>Delete
+                                  </button>
+                                <?php endif; ?>
+                              </div>
                             <?php endif; ?>
                           </div>
-                        <?php endif; ?>
+                          <?php if ($currentFileThumbUrl): ?>
+                            <div class="col-12 col-md-2 d-flex align-items-center justify-content-md-center">
+                              <img class="img-thumbnail" src="<?php echo cms_h($currentFileThumbUrl); ?>" alt="" style="width: 96px; height: 72px; object-fit: cover;">
+                            </div>
+                          <?php endif; ?>
+                        </div>
                       <?php elseif ($fieldTypeId === 23): ?>
                         <?php
                           $accept = cms_media_accept_attr($field['file_ext'] ?? '');
@@ -1270,18 +1301,28 @@ if (!isset($galleryItems)) {
                     <?php
                       $accept = cms_media_accept_attr($field['file_ext'] ?? '');
                       $inputName = 'cms_file_' . (int) ($field['id'] ?? 0);
+                      $currentFileThumbUrl = ($fieldName && !empty($record[$fieldName])) ? cms_file_field_thumb_url($field, (string) $record[$fieldName]) : '';
                     ?>
-                    <input class="form-control" type="file" id="field-<?php echo cms_h($fieldName); ?>" name="<?php echo cms_h($inputName); ?>" <?php echo $accept ? 'accept="' . cms_h($accept) . '"' : ''; ?> <?php echo $allowEdit ? '' : 'disabled'; ?>>
-                    <?php if ($fieldTypeId === 21 && $fieldName && !empty($record[$fieldName])): ?>
-                      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
-                        <div class="form-text mt-0">Current: <?php echo cms_h((string) $record[$fieldName]); ?></div>
-                        <?php if ($allowEdit): ?>
-                          <button class="btn btn-sm btn-outline-danger" type="submit" name="cms_file_delete[<?php echo (int) ($field['id'] ?? 0); ?>]" value="1" onclick="return confirm('Delete this file from this record?')">
-                            <i class="fa-solid fa-trash me-1"></i>Delete
-                          </button>
+                    <div class="row g-3 align-items-center">
+                      <div class="<?php echo $currentFileThumbUrl ? 'col-12 col-md-10' : 'col-12'; ?>">
+                        <input class="form-control" type="file" id="field-<?php echo cms_h($fieldName); ?>" name="<?php echo cms_h($inputName); ?>" <?php echo $accept ? 'accept="' . cms_h($accept) . '"' : ''; ?> <?php echo $allowEdit ? '' : 'disabled'; ?>>
+                        <?php if ($fieldTypeId === 21 && $fieldName && !empty($record[$fieldName])): ?>
+                          <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                            <div class="form-text mt-0">Current: <?php echo cms_h((string) $record[$fieldName]); ?></div>
+                            <?php if ($allowEdit): ?>
+                              <button class="btn btn-sm btn-outline-danger" type="submit" name="cms_file_delete[<?php echo (int) ($field['id'] ?? 0); ?>]" value="1" onclick="return confirm('Delete this file from this record?')">
+                                <i class="fa-solid fa-trash me-1"></i>Delete
+                              </button>
+                            <?php endif; ?>
+                          </div>
                         <?php endif; ?>
                       </div>
-                    <?php endif; ?>
+                      <?php if ($currentFileThumbUrl): ?>
+                        <div class="col-12 col-md-2 d-flex align-items-center justify-content-md-center">
+                          <img class="img-thumbnail" src="<?php echo cms_h($currentFileThumbUrl); ?>" alt="" style="width: 96px; height: 72px; object-fit: cover;">
+                        </div>
+                      <?php endif; ?>
+                    </div>
                   <?php elseif ($fieldTypeId === 23): ?>
                     <?php
                       $accept = cms_media_accept_attr($field['file_ext'] ?? '');
