@@ -522,6 +522,11 @@ function cms_field_choice_options(PDO $pdo, array $field, int $fieldTypeId, stri
   return $options;
 }
 
+function cms_form_field_target_table(PDO $pdo, array $field, ?string $contentTable): ?string {
+  $tableId = (int) ($field['table'] ?? 0);
+  return $tableId ? cms_resolve_table_name($pdo, $tableId) : $contentTable;
+}
+
 /**
  * Map field layout class to grid column class (currently fixed width).
  */
@@ -670,11 +675,13 @@ if ($postFormId !== $formId || $postRecordId !== $recordId) {
     $tablesTouched = [];
     $uploadUpdates = [];
     $uploadErrors = [];
+    $fileDeleteRequests = is_array($_POST['cms_file_delete'] ?? null) ? $_POST['cms_file_delete'] : [];
 
     $galleryItems = cms_fetch_gallery_items($pdo, $formId, $recordId);
     $galleryIds = array_map(static fn($row) => (int) ($row['id'] ?? 0), $galleryItems);
 
     foreach ($fields as $field) {
+      $fieldId = (int) ($field['id'] ?? 0);
       $fieldTypeId = (int) ($field['field'] ?? 0);
       if (!in_array($fieldTypeId, [21, 23], true)) {
         continue;
@@ -685,7 +692,26 @@ if ($postFormId !== $formId || $postRecordId !== $recordId) {
       if (!cms_is_yes($field['allowedit'] ?? 'Yes')) {
         continue;
       }
-      $inputKey = 'cms_file_' . (int) ($field['id'] ?? 0);
+
+      $fieldName = (string) ($field['name'] ?? '');
+      if ($fieldTypeId === 21 && $fieldId > 0 && isset($fileDeleteRequests[$fieldId]) && (string) $fileDeleteRequests[$fieldId] === '1' && $fieldName !== '') {
+        $targetTable = cms_form_field_target_table($pdo, $field, $contentTable);
+        if ($targetTable && cms_table_exists($pdo, $targetTable)) {
+          if (!isset($tableColumns[$targetTable])) {
+            $tableColumns[$targetTable] = cms_table_columns($pdo, $targetTable);
+          }
+          $columnNames = array_map(static fn($col) => $col['Field'] ?? '', $tableColumns[$targetTable]);
+          if (in_array($fieldName, $columnNames, true)) {
+            if (!isset($uploadUpdates[$targetTable])) {
+              $uploadUpdates[$targetTable] = [];
+            }
+            $uploadUpdates[$targetTable][$fieldName] = '';
+            $debugSql[] = 'File field cleared: ' . $targetTable . '.' . $fieldName;
+          }
+        }
+      }
+
+      $inputKey = 'cms_file_' . $fieldId;
       if ($inputKey === 'cms_file_0' || empty($_FILES[$inputKey])) {
         continue;
       }
@@ -722,8 +748,7 @@ if ($postFormId !== $formId || $postRecordId !== $recordId) {
 
         $fieldName = $field['name'] ?? '';
         if ($fieldTypeId === 21 && $fieldName !== '') {
-          $tableId = (int) ($field['table'] ?? 0);
-          $targetTable = $tableId ? cms_resolve_table_name($pdo, $tableId) : $contentTable;
+          $targetTable = cms_form_field_target_table($pdo, $field, $contentTable);
           if ($targetTable && cms_table_exists($pdo, $targetTable)) {
             if (!isset($tableColumns[$targetTable])) {
               $tableColumns[$targetTable] = cms_table_columns($pdo, $targetTable);
@@ -842,8 +867,7 @@ if ($postFormId !== $formId || $postRecordId !== $recordId) {
         continue;
       }
 
-      $tableId = (int) ($field['table'] ?? 0);
-      $targetTable = $tableId ? cms_resolve_table_name($pdo, $tableId) : $contentTable;
+      $targetTable = cms_form_field_target_table($pdo, $field, $contentTable);
       if (!$targetTable || !cms_table_exists($pdo, $targetTable)) {
         continue;
       }
@@ -1084,7 +1108,14 @@ if (!isset($galleryItems)) {
                         ?>
                         <input class="form-control" type="file" id="field-<?php echo cms_h($fieldName); ?>" name="<?php echo cms_h($inputName); ?>" <?php echo $accept ? 'accept="' . cms_h($accept) . '"' : ''; ?> <?php echo $allowEdit ? '' : 'disabled'; ?>>
                         <?php if ($fieldTypeId === 21 && $fieldName && !empty($record[$fieldName])): ?>
-                          <div class="form-text">Current: <?php echo cms_h((string) $record[$fieldName]); ?></div>
+                          <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                            <div class="form-text mt-0">Current: <?php echo cms_h((string) $record[$fieldName]); ?></div>
+                            <?php if ($allowEdit): ?>
+                              <button class="btn btn-sm btn-outline-danger" type="submit" name="cms_file_delete[<?php echo (int) ($field['id'] ?? 0); ?>]" value="1" onclick="return confirm('Delete this file from this record?')">
+                                <i class="fa-solid fa-trash me-1"></i>Delete
+                              </button>
+                            <?php endif; ?>
+                          </div>
                         <?php endif; ?>
                       <?php elseif ($fieldTypeId === 23): ?>
                         <?php
@@ -1242,7 +1273,14 @@ if (!isset($galleryItems)) {
                     ?>
                     <input class="form-control" type="file" id="field-<?php echo cms_h($fieldName); ?>" name="<?php echo cms_h($inputName); ?>" <?php echo $accept ? 'accept="' . cms_h($accept) . '"' : ''; ?> <?php echo $allowEdit ? '' : 'disabled'; ?>>
                     <?php if ($fieldTypeId === 21 && $fieldName && !empty($record[$fieldName])): ?>
-                      <div class="form-text">Current: <?php echo cms_h((string) $record[$fieldName]); ?></div>
+                      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                        <div class="form-text mt-0">Current: <?php echo cms_h((string) $record[$fieldName]); ?></div>
+                        <?php if ($allowEdit): ?>
+                          <button class="btn btn-sm btn-outline-danger" type="submit" name="cms_file_delete[<?php echo (int) ($field['id'] ?? 0); ?>]" value="1" onclick="return confirm('Delete this file from this record?')">
+                            <i class="fa-solid fa-trash me-1"></i>Delete
+                          </button>
+                        <?php endif; ?>
+                      </div>
                     <?php endif; ?>
                   <?php elseif ($fieldTypeId === 23): ?>
                     <?php
