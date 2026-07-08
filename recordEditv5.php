@@ -1012,6 +1012,7 @@ if (!$errors && $fields) {
 }
 
 $formTitle = $form['title'] ?? 'Form';
+$recordName = is_array($record) && isset($record['name']) ? trim((string) $record['name']) : '';
 if (!isset($galleryItems)) {
   $galleryItems = cms_fetch_gallery_items($pdo, $formId, $recordId);
 }
@@ -1021,8 +1022,13 @@ if (!isset($galleryItems)) {
   <main class="cms-content">
     <div class="cms-content-header">
       <div>
-        <h1 class="h3 mb-1">Edit <?php echo cms_h($formTitle); ?></h1>
-        <p class="text-muted mb-0">Table: <?php echo cms_h($contentTable ?? ''); ?> · Record: <?php echo cms_h((string) $recordId); ?></p>
+        <h1 class="h3 mb-1">
+          <span class="fw-light text-muted">Edit <?php echo cms_h($formTitle); ?></span>
+          <?php if ($recordName !== ''): ?>
+            <span class="fw-semibold"><?php echo cms_h($recordName); ?></span>
+          <?php endif; ?>
+        </h1>
+        <p class="text-muted mb-0">Record: <?php echo cms_h((string) $recordId); ?></p>
       </div>
       <div>
         <a class="btn btn-outline-secondary" href="<?php echo $CMS_BASE_URL; ?>/recordViewv5.php?frm=<?php echo cms_h((string) ($form['id'] ?? $formId)); ?>">Back to list</a>
