@@ -4,7 +4,7 @@ if (file_exists(__DIR__ . '/../../../private/email.php')) {
   require_once __DIR__ . '/../../../private/email.php';
 }
 require_once __DIR__ . '/emailsig.php';
-
+//add ed a line to test commit
 /**
  * Send a CMS email using configured SMTP (or PHP mail as a fallback).
  */
