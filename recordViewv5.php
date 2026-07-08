@@ -42,6 +42,69 @@ function cms_pick_column(array $columns, array $candidates): ?string {
 }
 
 /**
+ * Fetch form fields for a form, in tab/sort order.
+ */
+function cms_get_form_fields(PDO $pdo, int $formId): array {
+  if ($formId <= 0 || !cms_table_exists($pdo, 'cms_form_field')) {
+    return [];
+  }
+  $fieldCols = cms_table_columns($pdo, 'cms_form_field');
+  if (!$fieldCols) {
+    return [];
+  }
+  $formField = cms_pick_column($fieldCols, ['form', 'form_id', 'formid']);
+  if (!$formField) {
+    return [];
+  }
+  $sortField = cms_pick_column($fieldCols, ['sort', 'order', 'position']);
+  $tabField = cms_pick_column($fieldCols, ['tab']);
+  $showField = cms_pick_column($fieldCols, ['showonweb', 'show_on_web']);
+  $archivedField = cms_pick_column($fieldCols, ['archived']);
+  $orderParts = [];
+  if ($tabField) {
+    $orderParts[] = "`{$tabField}` ASC";
+  }
+  if ($sortField) {
+    $orderParts[] = "`{$sortField}` ASC";
+  }
+  $orderParts[] = 'id ASC';
+  $sql = "SELECT * FROM cms_form_field WHERE `{$formField}` = :form";
+  if ($showField) {
+    $sql .= " AND `{$showField}` = 'Yes'";
+  }
+  if ($archivedField) {
+    $sql .= " AND `{$archivedField}` = 0";
+  }
+  $sql .= ' ORDER BY ' . implode(', ', $orderParts);
+  try {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':form' => $formId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  } catch (PDOException $e) {
+    return [];
+  }
+}
+
+/**
+ * Load field type definitions keyed by ID.
+ */
+function cms_get_field_types(PDO $pdo): array {
+  if (!cms_table_exists($pdo, 'cms_field')) {
+    return [];
+  }
+  $stmt = $pdo->query("SELECT * FROM cms_field WHERE showonweb = 'Yes' AND archived = 0");
+  $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+  $map = [];
+  foreach ($rows as $row) {
+    if (!isset($row['id'])) {
+      continue;
+    }
+    $map[(int) $row['id']] = $row;
+  }
+  return $map;
+}
+
+/**
  * Validate an identifier for safe use in SQL identifiers.
  */
 function cms_safe_identifier(string $value): ?string {
@@ -526,6 +589,41 @@ function cms_render_rule_value($value, ?array $rule): string {
 }
 
 /**
+ * Determine whether a form field is configured as an HTML/editor field.
+ */
+function cms_is_html_field(array $field, array $fieldTypes): bool {
+  $fieldTypeId = (int) ($field["field"] ?? 0);
+  if ($fieldTypeId === 19) {
+    return true;
+  }
+  $typeRow = $fieldTypes[$fieldTypeId] ?? null;
+  $typeName = strtolower(trim((string) ($typeRow["name"] ?? $typeRow["title"] ?? $typeRow["type"] ?? "")));
+  return $typeName !== "" && (
+    str_contains($typeName, "html")
+    || str_contains($typeName, "editor")
+    || str_contains($typeName, "tinymce")
+    || str_contains($typeName, "wysiwyg")
+  );
+}
+
+/**
+ * Render stored HTML for HTML/editor fields.
+ */
+function cms_render_html_value($value): string {
+  if ($value === null) {
+    return "";
+  }
+  $html = trim((string) $value);
+  if ($html === "") {
+    return "";
+  }
+  if (function_exists("cms_apply_shortcodes")) {
+    $html = cms_apply_shortcodes($html);
+  }
+  return $html;
+}
+
+/**
  * Normalize yes/no style flags stored as Yes/No or 1/0.
  */
 function cms_is_yes($value): bool {
@@ -565,6 +663,7 @@ $contentTable = null;
 $viewColumns = [];
 $actions = [];
 $viewRules = [];
+$htmlFields = [];
 
 if (!$errors) {
   // Resolve form and target content table.
@@ -653,6 +752,15 @@ if (!$errors && $contentTable) {
   }
   $actions = cms_get_form_actions($pdo, $form);
   $viewRules = cms_get_view_rules($pdo);
+  $formFields = cms_get_form_fields($pdo, (int) ($form["id"] ?? 0));
+  $fieldTypes = cms_get_field_types($pdo);
+  foreach ($formFields as $field) {
+    $fieldName = cms_safe_identifier((string) ($field["name"] ?? ""));
+    if (!$fieldName) {
+      continue;
+    }
+    $htmlFields[$fieldName] = cms_is_html_field($field, $fieldTypes);
+  }
 }
 
 $formTitle = $form ? cms_get_form_title($pdo, $form) : 'Records';
@@ -772,6 +880,7 @@ if (!$errors && $contentTable) {
       'label' => $col['label'],
       'type' => $col['type'],
       'rule_id' => $col['rule_id'],
+      'is_html' => !empty($htmlFields[$name]),
       'display' => $aliasName,
       'raw' => $rawAliasName,
       'expr' => $displayExpr,
@@ -1032,7 +1141,7 @@ if (!$errors && $contentTable) {
                         ?>
                         <?php $ruleId = (int) ($meta['rule_id'] ?? 0); ?>
                         <?php $rule = $ruleId && isset($viewRules[$ruleId]) ? $viewRules[$ruleId] : null; ?>
-                        <td><?php echo cms_render_rule_value($display, $rule); ?></td>
+                        <td><?php echo !empty($meta['is_html']) ? cms_render_html_value($display) : cms_render_rule_value($display, $rule); ?></td>
                       <?php endforeach; ?>
                       <td class="text-center cms-record-actions">
                         <?php if ($actions): ?>
