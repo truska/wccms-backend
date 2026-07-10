@@ -169,7 +169,7 @@ $pdf->Cell($colW1, 8, 'EMPLOYER NAME', 1, 0, 'L');
 $pdf->SetFont('', '');
 $pdf->SetTextColor(192, 0, 0); // #C00000
 $pdf->SetFont('', 'B');
-$pdf->Cell($colW2, 8, 'Pete Cunningham', 1, 0, 'L');
+$pdf->Cell($colW2, 8, 'Julie Cunningham', 1, 0, 'L');
 $pdf->SetTextColor(0, 0, 0);
 $pdf->SetFont('', 'B');
 $pdf->Cell($colW3, 8, 'PAYROLL NO.', 1, 0, 'L');
