@@ -210,7 +210,6 @@ $pdf->Ln(6);
 
 
 
-
     // Grid: loop 7 days per row
     $dateIter = new DatePeriod(
         new DateTime($startDate),
