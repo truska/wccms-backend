@@ -19,19 +19,12 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 <?php
-  $tinyKey = trim((string) cms_pref('prefTinyMCEapi', '', 'cms'));
   $tinyMenu = trim((string) cms_pref('prefTinyMCEMenu', '', 'cms'));
   $tinyHeight = (int) cms_pref('prefTinyMCEHeight', 300, 'cms');
   $tinyToolbar = trim((string) cms_pref('prefTinyMCEToolbar', '', 'cms'));
   $tinyPlugins = trim((string) cms_pref('prefTinyMCEPlugins', '', 'cms'));
 
-  if ($tinyKey === '') {
-    $tinySrc = $CMS_BASE_URL . '/vendor/tinymce/tinymce.min.js';
-  } elseif (preg_match('/^https?:\\/\\//i', $tinyKey)) {
-    $tinySrc = $tinyKey;
-  } else {
-    $tinySrc = 'https://cdn.tiny.cloud/1/' . $tinyKey . '/tinymce/6/tinymce.min.js';
-  }
+  $tinySrc = $CMS_BASE_URL . '/vendor/tinymce/tinymce.min.js';
 ?>
 <?php if ($tinySrc !== ''): ?>
   <script src="<?php echo cms_h($tinySrc); ?>" referrerpolicy="origin"></script>
@@ -40,6 +33,7 @@
       tinymce.init(<?php
         $config = [
           'selector' => 'textarea.cms-tinymce',
+          'license_key' => 'gpl',
           'height' => $tinyHeight > 0 ? $tinyHeight : 300,
           'menubar' => $tinyMenu !== '' ? $tinyMenu : false,
         ];

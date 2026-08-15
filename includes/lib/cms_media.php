@@ -97,19 +97,29 @@ function cms_media_get_image_resource(string $path, string $mime) {
 }
 
 function cms_media_save_image($image, string $dest, string $ext, int $quality = 90): bool {
+  $written = false;
   switch ($ext) {
     case 'jpg':
     case 'jpeg':
-      return imagejpeg($image, $dest, $quality);
+      $written = imagejpeg($image, $dest, $quality);
+      break;
     case 'png':
-      return imagepng($image, $dest, 6);
+      $written = imagepng($image, $dest, 6);
+      break;
     case 'gif':
-      return imagegif($image, $dest);
+      $written = imagegif($image, $dest);
+      break;
     case 'webp':
-      return function_exists('imagewebp') ? imagewebp($image, $dest, $quality) : false;
+      $written = function_exists('imagewebp') ? imagewebp($image, $dest, $quality) : false;
+      break;
     default:
       return false;
   }
+
+  if ($written) {
+    chmod($dest, 0664);
+  }
+  return $written;
 }
 
 function cms_media_resize_image($source, int $targetWidth, int $targetHeight) {
@@ -210,6 +220,7 @@ function cms_media_store_upload(array $file, array $field, array $record, int $f
       $errors[] = 'Failed to move uploaded file to ' . $dest . ' (check permissions).';
       return $result;
     }
+    chmod($dest, 0664);
     $result['ok'] = true;
     return $result;
   }
@@ -235,6 +246,7 @@ function cms_media_store_upload(array $file, array $field, array $record, int $f
       $errors[] = 'Failed to move original upload to: ' . $originalDir;
       return $result;
     }
+    chmod($originalDir . $filename, 0664);
   }
 
   $defaultSize = (int) ($field['default_size'] ?? 0);
