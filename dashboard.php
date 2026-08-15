@@ -1,4 +1,5 @@
 <?php
+//dashboard
 require_once __DIR__ . '/includes/boot.php';
 // Protect the CMS dashboard from anonymous access.
 cms_require_login();
