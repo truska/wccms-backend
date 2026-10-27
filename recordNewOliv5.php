@@ -1194,11 +1194,14 @@ $formTitle = $form['title'] ?? 'Form';
     if (match) {
       return { date: match[1], hour: parseInt(match[2], 10), minute: parseInt(match[3], 10) };
     }
-    const now = new Date();
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date()).map(part => [part.type, part.value]));
     return {
-      date: now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()),
-      hour: now.getHours(),
-      minute: now.getMinutes()
+      date: parts.year + '-' + parts.month + '-' + parts.day,
+      hour: Number(parts.hour),
+      minute: Number(parts.minute)
     };
   }
 

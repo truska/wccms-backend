@@ -75,7 +75,7 @@ foreach (cms_db_fetch_all($sql, $params) as $row) {
 // --- Load times ---
 
 $timeRows = cms_db_fetch_all(
-    "SELECT name, timefrom, timeto, type
+    "SELECT name, timefrom, timeto, type, UNIX_TIMESTAMP(timeto) - UNIX_TIMESTAMP(timefrom) AS elapsed_seconds
      FROM oli_times
      WHERE DATE(timefrom) BETWEEN :start_date AND :end_date
      AND archived = 0
@@ -91,7 +91,7 @@ foreach ($timeRows as $row) {
     if (!isset($staff[$staffId])) continue;
 
     $dayKey = date('Y-m-d', strtotime($row['timefrom']));
-    $seconds = strtotime($row['timeto']) - strtotime($row['timefrom']);
+    $seconds = (int) $row['elapsed_seconds'];
 
     if ($seconds <= 0) {
         $staff[$staffId]['days'][$dayKey][$row['type']] = 'ERR';

@@ -949,6 +949,14 @@ if ($postFormId !== $formId || $postRecordId !== $recordId) {
 
       // Normalize checkbox values for unchecked states.
       $value = $_POST[$fieldName] ?? null;
+      // Leave unchanged local datetime inputs untouched in SQL. In the autumn
+      // repeated hour, re-parsing a display string could change its UTC instant.
+      $isOliInstant = ($targetTable === 'oli_times' && in_array($fieldName, ['timefrom', 'timeto'], true))
+        || ($targetTable === 'oli_medicine' && $fieldName === 'timegiven');
+      if ($isOliInstant && $targetTable === $contentTable && $value !== null
+          && substr(str_replace('T', ' ', (string) $value), 0, 16) === substr((string) ($record[$fieldName] ?? ''), 0, 16)) {
+        continue;
+      }
       if (cms_oli_is_times_datetime_field($targetTable, $fieldName)) {
         $value = cms_oli_datetime_for_mysql($value, $field);
       }
@@ -1495,11 +1503,14 @@ if (!isset($galleryItems)) {
     if (match) {
       return { date: match[1], hour: parseInt(match[2], 10), minute: parseInt(match[3], 10) };
     }
-    const now = new Date();
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date()).map(part => [part.type, part.value]));
     return {
-      date: now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()),
-      hour: now.getHours(),
-      minute: now.getMinutes()
+      date: parts.year + '-' + parts.month + '-' + parts.day,
+      hour: Number(parts.hour),
+      minute: Number(parts.minute)
     };
   }
 

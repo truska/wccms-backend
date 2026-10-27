@@ -109,8 +109,7 @@ function payroll_hours_format_record(array $record): array {
     return [];
   }
   $fromTs = strtotime((string) $record['timefrom']);
-  $toTs = strtotime((string) $record['timeto']);
-  $minutes = max(0, (int) floor(($toTs - $fromTs) / 60));
+  $minutes = max(0, (int) floor((int) $record['elapsed_seconds'] / 60));
   return [
     'id' => (int) $record['id'],
     'date' => date('D j M Y', $fromTs),
@@ -197,6 +196,7 @@ try {
 
     $record = cms_db_fetch_one(
       "SELECT t.id, t.name AS staff_id, t.type, t.timefrom, t.timeto, t.comment, t.notes, t.verified,
+              UNIX_TIMESTAMP(t.timefrom) AS from_epoch, UNIX_TIMESTAMP(t.timeto) AS to_epoch,
               p.id AS period_id, p.period, p.datefrom, p.dateto, p.payroll_submitted
        FROM oli_times t
        INNER JOIN oli_payeschedule p ON DATE(t.timefrom) BETWEEN p.datefrom AND p.dateto
@@ -233,18 +233,29 @@ try {
     if (!$timefrom || !$timeto) {
       payroll_hours_fail('warning', 'Please enter valid Start Time and Finish Time values.');
     }
-    if (strtotime($timeto) <= strtotime($timefrom)) {
+    $startEpoch = $timefrom === (string) $record['timefrom'] ? (int) $record['from_epoch'] : strtotime($timefrom);
+    $endEpoch = $timeto === (string) $record['timeto'] ? (int) $record['to_epoch'] : strtotime($timeto);
+    if ($endEpoch <= $startEpoch) {
       payroll_hours_fail('warning', 'Finish Time must be after Start Time. Please correct the times before saving.');
     }
 
     $comment = trim((string) ($_POST['comment'] ?? ''));
     $notes = trim((string) ($_POST['notes'] ?? ''));
 
+    // Do not re-interpret an unchanged repeated-hour local display value.
+    $dateAssignments = '';
+    $dateParams = [];
+    foreach (['timefrom' => $timefrom, 'timeto' => $timeto] as $column => $value) {
+      if ($value !== (string) $record[$column]) {
+        $dateAssignments .= "$column = :$column, ";
+        $dateParams[":$column"] = $value;
+      }
+    }
+
     cms_db_execute(
       "UPDATE oli_times
        SET type = :type,
-           timefrom = :timefrom,
-           timeto = :timeto,
+           $dateAssignments
            comment = :comment,
            notes = :notes,
            verified = 0,
@@ -252,15 +263,13 @@ try {
        WHERE id = :id",
       [
         ':type' => $type,
-        ':timefrom' => $timefrom,
-        ':timeto' => $timeto,
         ':comment' => $comment,
         ':notes' => $notes,
         ':id' => $timeId,
-      ]
+      ] + $dateParams
     );
 
-    $updated = cms_db_fetch_one('SELECT id, type, timefrom, timeto, verified FROM oli_times WHERE id = :id LIMIT 1', [':id' => $timeId]);
+    $updated = cms_db_fetch_one('SELECT id, type, timefrom, timeto, verified, UNIX_TIMESTAMP(timeto) - UNIX_TIMESTAMP(timefrom) AS elapsed_seconds FROM oli_times WHERE id = :id LIMIT 1', [':id' => $timeId]);
     payroll_hours_log('AMEND_TIME', $timeId, 'Amended time record from dashboard; marked not verified.', 'UPDATE oli_times SET verified = 0 WHERE id = ' . $timeId);
     payroll_hours_success('Time record amended and marked as not verified.', ['record' => payroll_hours_format_record($updated ?: [])]);
   }

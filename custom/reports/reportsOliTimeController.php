@@ -61,6 +61,7 @@ function getOliTimeRecordsGroupedByStaff($startDate, $endDate) {
     $sql = "
         SELECT 
             oli_times.*,
+            UNIX_TIMESTAMP(oli_times.timeto) - UNIX_TIMESTAMP(oli_times.timefrom) AS elapsed_seconds,
             oli_staff.name AS staff_first,
             oli_staff.surname AS staff_last
         FROM oli_times

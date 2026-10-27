@@ -116,7 +116,7 @@ $records = getOliTimeRecordsGroupedByStaff($startDate, $endDate);
                                         echo '</tr>';
 
                                         foreach ($entries as $row):
-                                            $seconds = strtotime($row['timeto']) - strtotime($row['timefrom']);
+                                            $seconds = (int) $row['elapsed_seconds'];
                                             $actualHours = $seconds / 3600;
                                             $rounded = ceil($actualHours * 2) / 2; // To the next 30 mins
                                             $rounded = ceil($actualHours * 4) / 4;  // To the next 15 mins
