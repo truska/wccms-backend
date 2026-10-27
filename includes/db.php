@@ -2,10 +2,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../../private/dbcon.php';
-require_once __DIR__ . '/timezone.php';
-if (isset($pdo) && $pdo instanceof PDO) {
-    cms_configure_database_timezone($pdo);
-}
 
 function cms_db(): PDO
 {

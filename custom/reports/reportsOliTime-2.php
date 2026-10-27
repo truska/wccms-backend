@@ -80,7 +80,7 @@
   
 
   $timeRows = cms_db_fetch_all(
-      "SELECT `name`, `timefrom`, `timeto`, `type`, UNIX_TIMESTAMP(timeto) - UNIX_TIMESTAMP(timefrom) AS elapsed_seconds
+      "SELECT `name`, `timefrom`, `timeto`, `type`
         FROM `oli_times` 
           WHERE DATE(timefrom) BETWEEN :start_date AND :end_date
           AND `showonweb` = 'Yes'
@@ -104,7 +104,7 @@
         continue;
     }
 
-    $seconds = (int) $row['elapsed_seconds'];
+    $seconds = strtotime($row['timeto']) - strtotime($row['timefrom']);
 
     if ($seconds <= 0) {
         $staff[$staffId]['days'][$day][$row['type']] = 'ERR';

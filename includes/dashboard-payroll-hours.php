@@ -36,10 +36,7 @@ function payroll_hours_period_has_ended(array $period, DateTimeImmutable $now): 
   return $now > $periodEnd;
 }
 
-function payroll_hours_duration_minutes(?string $from, ?string $to, $elapsedSeconds = null): int {
-  if ($elapsedSeconds !== null) {
-    return max(0, (int) floor((int) $elapsedSeconds / 60));
-  }
+function payroll_hours_duration_minutes(?string $from, ?string $to): int {
   if (!$from || !$to) {
     return 0;
   }
@@ -92,7 +89,7 @@ function payroll_hours_timeline_records(array $period): array {
   $periodStart = (new DateTimeImmutable((string) $period['datefrom']))->setTime(0, 0)->format('Y-m-d H:i:s');
   $periodEnd = (new DateTimeImmutable((string) $period['dateto']))->modify('+1 day')->setTime(0, 0)->format('Y-m-d H:i:s');
   return cms_db_fetch_all(
-    'SELECT id, type, timefrom, timeto, UNIX_TIMESTAMP(timefrom) AS from_epoch, UNIX_TIMESTAMP(timeto) AS to_epoch
+    'SELECT id, type, timefrom, timeto
      FROM oli_times
      WHERE archived = 0
        AND showonweb = "Yes"
@@ -125,8 +122,8 @@ function payroll_hours_timeline_days(array $period, array $records): array {
   $periodEnd = $end->modify('+1 day');
   foreach ($records as $record) {
     try {
-      $from = (new DateTimeImmutable('@' . $record['from_epoch']))->setTimezone(new DateTimeZone('Europe/London'));
-      $to = (new DateTimeImmutable('@' . $record['to_epoch']))->setTimezone(new DateTimeZone('Europe/London'));
+      $from = new DateTimeImmutable((string) $record['timefrom']);
+      $to = new DateTimeImmutable((string) $record['timeto']);
     } catch (Throwable $e) {
       continue;
     }
@@ -148,8 +145,8 @@ function payroll_hours_timeline_days(array $period, array $records): array {
         $from = $chunkEnd;
         continue;
       }
-      $startMinute = max(0, ((int) $from->format('H') * 60 + (int) $from->format('i')));
-      $endMinute = min(1440, ($chunkEnd == $dayEnd ? 1440 : ((int) $chunkEnd->format('H') * 60 + (int) $chunkEnd->format('i'))));
+      $startMinute = max(0, (int) floor(($from->getTimestamp() - $dayStart->getTimestamp()) / 60));
+      $endMinute = min(1440, (int) ceil(($chunkEnd->getTimestamp() - $dayStart->getTimestamp()) / 60));
       $startSegment = max(0, min(95, (int) floor($startMinute / 15)));
       $endSegment = max($startSegment + 1, min(96, (int) ceil($endMinute / 15)));
       $bar = [
@@ -171,7 +168,7 @@ function payroll_hours_timeline_days(array $period, array $records): array {
       }
       $days[$key]['lanes'][$laneIndex][] = $bar;
       $days[$key]['laneEnds'][$laneIndex] = $endSegment;
-      $days[$key]['minutes'] += max(0, (int) floor(($chunkEnd->getTimestamp() - $from->getTimestamp()) / 60));
+      $days[$key]['minutes'] += max(0, $endMinute - $startMinute);
       $from = $chunkEnd;
     }
   }
@@ -184,7 +181,7 @@ function payroll_hours_timeline_days(array $period, array $records): array {
 }
 function payroll_hours_staff_period_rows(int $staffId, array $period): array {
   return cms_db_fetch_all(
-    'SELECT id, name, type, timefrom, timeto, comment, notes, verified, UNIX_TIMESTAMP(timeto) - UNIX_TIMESTAMP(timefrom) AS elapsed_seconds
+    'SELECT id, name, type, timefrom, timeto, comment, notes, verified
      FROM oli_times
      WHERE name = :staff_id
        AND archived = 0
@@ -208,7 +205,7 @@ function payroll_hours_period_summary(array $rows): array {
       $verified++;
     }
     $label = payroll_hours_type_label($row['type'] ?? '');
-    $typeTotals[$label] = ($typeTotals[$label] ?? 0) + payroll_hours_duration_minutes($row['timefrom'] ?? null, $row['timeto'] ?? null, $row['elapsed_seconds'] ?? null);
+    $typeTotals[$label] = ($typeTotals[$label] ?? 0) + payroll_hours_duration_minutes($row['timefrom'] ?? null, $row['timeto'] ?? null);
   }
   return [
     'total' => $total,
@@ -372,7 +369,7 @@ if ($payrollIsAdmin) {
                     <?php foreach ($rows as $row): ?>
                       <?php
                         $verified = (int) ($row['verified'] ?? 0) === 1;
-                        $minutes = payroll_hours_duration_minutes($row['timefrom'] ?? null, $row['timeto'] ?? null, $row['elapsed_seconds'] ?? null);
+                        $minutes = payroll_hours_duration_minutes($row['timefrom'] ?? null, $row['timeto'] ?? null);
                       ?>
                       <tr data-time-row="<?php echo (int) $row['id']; ?>">
                         <td data-label="Date" data-time-cell="date"><?php echo payroll_hours_h(date('D j M Y', strtotime((string) $row['timefrom']))); ?></td>
@@ -903,13 +900,10 @@ if ($payrollIsAdmin) {
     if (match) {
       return { date: match[1], hour: match[2], minute: match[3] };
     }
-    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-    }).formatToParts(new Date()).map(part => [part.type, part.value]));
+    const now = new Date();
     return {
-      date: parts.year + '-' + parts.month + '-' + parts.day,
-      hour: parts.hour,
+      date: now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()),
+      hour: pad(now.getHours()),
       minute: '00'
     };
   }

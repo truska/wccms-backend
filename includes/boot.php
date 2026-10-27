@@ -1,10 +1,6 @@
 <?php
 // Core CMS bootstrap: DB connection, auth helpers, email helpers, and shared prefs.
 require_once __DIR__ . '/../../../private/dbcon.php';
-require_once __DIR__ . '/timezone.php';
-if (isset($pdo) && $pdo instanceof PDO) {
-    cms_configure_database_timezone($pdo);
-}
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/email.php';
 require_once __DIR__ . '/prefs.php';
